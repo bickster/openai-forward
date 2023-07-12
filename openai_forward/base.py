@@ -11,6 +11,9 @@ from .config import print_startup_info, setting_log
 from .content.chat import ChatSaver
 from .tool import env2list
 
+import hmac
+import hashlib
+
 
 class OpenaiBase:
     BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com").strip()
@@ -22,6 +25,7 @@ class OpenaiBase:
     _no_auth_mode = _openai_api_key_list != [] and _FWD_KEYS == set()
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
+    APP_SECRET = ""
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -64,16 +68,31 @@ class OpenaiBase:
             logger.debug(f"log chat (not) error:\n{e=}")
 
     @classmethod
+    async def validate_request(cls, request: Request):
+        signature = request.headers.get('X-Request-Signature')
+        if not signature:
+            return False
+        request_data = await request.body()
+        expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(signature, expected_signature)
+
+    @classmethod
     async def _reverse_proxy(cls, request: Request):
+        if not await cls.validate_request(request):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Forbidden",
+            )
+
         client = httpx.AsyncClient(base_url=cls.BASE_URL, http1=True, http2=False)
         url_path = request.url.path
-        url_path = url_path[len(cls.ROUTE_PREFIX) :]
+        url_path = url_path[len(cls.ROUTE_PREFIX):]
         url = httpx.URL(path=url_path, query=request.url.query.encode("utf-8"))
         headers = dict(request.headers)
         auth = headers.pop("authorization", "")
         auth_headers_dict = {"Content-Type": "application/json", "Authorization": auth}
         auth_prefix = "Bearer "
-        if cls._no_auth_mode or auth and auth[len(auth_prefix) :] in cls._FWD_KEYS:
+        if cls._no_auth_mode or auth and auth[len(auth_prefix):] in cls._FWD_KEYS:
             auth = auth_prefix + next(cls._cycle_api_key)
             auth_headers_dict["Authorization"] = auth
 
