@@ -65,12 +65,14 @@ class ChatSaver:
             payload = await request.json()
             msgs = payload["messages"]
             model = payload["model"]
+            user_agent = request.headers.get("user-agent") or ""
             content = {
                 "messages": [{msg["role"]: msg["content"]} for msg in msgs],
                 "model": model,
                 "forwarded-for": request.headers.get("x-forwarded-for") or "",
                 "uid": uid,
                 "datetime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+                "user-agent": user_agent
             }
         else:
             content = {}
