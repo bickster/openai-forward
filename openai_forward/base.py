@@ -25,7 +25,7 @@ class OpenaiBase:
     _no_auth_mode = _openai_api_key_list != [] and _FWD_KEYS == set()
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
-    APP_SECRET = ""
+    APP_SECRET = env2list("APP_SECRET", sep=" ")
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -41,7 +41,8 @@ class OpenaiBase:
         setting_log(save_file=False)
         chatsaver = ChatSaver()
 
-    def validate_request_host(self, ip):
+    def validate_request_host(self, request: Request):
+        ip = request.client.host
         if self.IP_WHITELIST and ip not in self.IP_WHITELIST:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -51,6 +52,13 @@ class OpenaiBase:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Forbidden, ip={ip} in blacklist!",
+            )
+
+        forward_for = request.headers.get("x-forwarded-for")
+        if self.IP_BLACKLIST and forward_for in self.IP_BLACKLIST:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Forbidden",
             )
 
     @classmethod
@@ -73,6 +81,7 @@ class OpenaiBase:
         if not signature:
             return False
         request_data = await request.body()
+        logger.debug(request_data)
         expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
 

@@ -16,6 +16,7 @@ class Cli:
         route_prefix=None,
         ip_whitelist=None,
         ip_blacklist=None,
+        app_secret=None,
     ):
         """Run forwarding serve.
 
@@ -31,6 +32,7 @@ class Cli:
         route_prefix: str, None
         ip_whitelist: str, None
         ip_blacklist: str, None
+        app_secret: str, None
         """
         if base_url:
             os.environ["OPENAI_BASE_URL"] = base_url
@@ -46,6 +48,8 @@ class Cli:
             os.environ["IP_WHITELIST"] = ip_whitelist
         if ip_blacklist:
             os.environ["IP_BLACKLIST"] = ip_blacklist
+        if app_secret:
+            os.environ["APP_SECRET"] = app_secret
 
         ssl_keyfile = os.environ.get("ssl_keyfile", None) or None
         ssl_certfile = os.environ.get("ssl_certfile", None) or None

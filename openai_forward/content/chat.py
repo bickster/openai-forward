@@ -72,7 +72,7 @@ class ChatSaver:
                 "forwarded-for": request.headers.get("x-forwarded-for") or "",
                 "uid": uid,
                 "datetime": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
-                "user-agent": user_agent
+                "user-agent": user_agent,
             }
         else:
             content = {}
