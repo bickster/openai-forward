@@ -25,7 +25,7 @@ class OpenaiBase:
     _no_auth_mode = _openai_api_key_list != [] and _FWD_KEYS == set()
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
-    APP_SECRET = env2list("APP_SECRET", sep=" ")
+    APP_SECRET = os.environ.get("APP_SECRET", "").strip()
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -81,7 +81,6 @@ class OpenaiBase:
         if not signature:
             return False
         request_data = await request.body()
-        logger.debug(request_data)
         expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
 
