@@ -6,3 +6,5 @@ orjson
 python-dotenv
 httpx
 pytz
+hmac
+hashlib
