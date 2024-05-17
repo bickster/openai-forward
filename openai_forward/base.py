@@ -14,6 +14,8 @@ from .tool import env2list
 import hmac
 import hashlib
 
+from .classifier import classify_prompt
+
 
 class OpenaiBase:
     BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com").strip()
