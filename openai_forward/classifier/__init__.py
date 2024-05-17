@@ -34,7 +34,7 @@ def classify_prompt(req_body):
                 for t in range(len(req_body['tools'])):
                     if req_body['tools'][t]['type'] == 'function':
                         if req_body['tools'][t]['function']['name'] == 'generateImage':
-                            req_body['tools'][t]['function']['parameters']['tool_choice'] = True # TODO: check this with Matt
+                            req_body['tools'][t]['function']['parameters']['tool_choice'] = { 'type': 'function', 'function': { 'name': 'generateImage' } }
 
             # prediction is text
             elif 1.0 - prediction > TEXT_THRESHOLD:
