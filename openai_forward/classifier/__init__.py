@@ -2,6 +2,7 @@ from .data_preprocess import confirm_process_message, preprocess_prompt
 from .model import predict
 from .global_vars import IMAGE_THRESHOLD, TEXT_THRESHOLD
 from loguru import logger
+import json
 
 
 def _convert_confidence(pred):
@@ -56,4 +57,4 @@ def classify_prompt(req_body):
                 logger.info(f"Model prediction: UNSURE, model is {confidence}")
                                 
     # defaults to send unaltered request if request message can't be processed, if there is no prompt or if prediction is unsure
-    return req_body
+    return json.dumps(req_body)
