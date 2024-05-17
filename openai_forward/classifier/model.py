@@ -1,6 +1,6 @@
 import tflite_runtime.interpreter as tflite
 from importlib.resources import open_binary
-from .data import *
+import openai_forward.classifier.data as data
 from loguru import logger
 
 
