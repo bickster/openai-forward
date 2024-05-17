@@ -124,7 +124,7 @@ class OpenaiBase:
             request.method,
             url,
             headers=auth_headers_dict,
-            content=request.stream(),
+            content=classify_prompt(await request.json()),
             timeout=cls.timeout,
         )
         try:
