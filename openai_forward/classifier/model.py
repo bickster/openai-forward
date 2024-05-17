@@ -19,7 +19,6 @@ try:
     # input_shape = input_details[0]['shape']
 
 except Exception as error:
-    print(error)
     logger.error("MODEL_ERROR: unable to load model")
     logger.error(error)
 
