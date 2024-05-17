@@ -8,6 +8,9 @@ import json
 def _convert_confidence(pred):
     return (((pred * 100) - 50) * 2) / 100
 
+def initialize():
+    pass
+
 def classify_prompt(req_body):
     if confirm_process_message(req_body):
 
