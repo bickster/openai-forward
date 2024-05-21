@@ -1,5 +1,5 @@
 from .data_preprocess import confirm_process_message, preprocess_prompt, load_vectorizer
-from .model import predict
+from .model import predict, load_model
 from .global_vars import IMAGE_THRESHOLD, TEXT_THRESHOLD
 from loguru import logger
 import json
@@ -10,6 +10,7 @@ def _convert_confidence(pred):
 
 def initialize():
     load_vectorizer()
+    load_model()
 
 def classify_prompt(req_body):
     if confirm_process_message(req_body):
