@@ -8,7 +8,7 @@ import json
 def _convert_confidence(pred):
     return (((pred * 100) - 50) * 2) / 100
 
-def initialize():
+def init_classifier():
     load_vectorizer()
     load_model()
 

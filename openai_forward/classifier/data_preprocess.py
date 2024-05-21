@@ -37,7 +37,7 @@ vectorizer = None
 def load_vectorizer():
     global vectorizer
     try:
-        import data
+        import openai_forward.classifier.data as data
         # tokens = list(json.loads(open_text(data, 'tokens.json').read()).keys())
         # vectorizer = tf.keras.layers.TextVectorization(
         #     standardize=append_start_end_tags,

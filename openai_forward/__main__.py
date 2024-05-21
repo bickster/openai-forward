@@ -2,7 +2,6 @@ import os
 
 import fire
 import uvicorn
-from .classifier import initialize
 
 
 class Cli:
@@ -75,7 +74,6 @@ class Cli:
 
 def main():
     fire.Fire(Cli)
-    initialize()
 
 
 if __name__ == "__main__":
