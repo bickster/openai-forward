@@ -69,17 +69,17 @@ def preprocess_prompt(prompt_string):
     if type(prompt_string) != str:
         raise TypeError
         logger.error("PRMOPT_PREPROCESSING_ERROR: prompt not in string format")
-        return np.array([False])
+        return False
     try:
         if vectorizer:
             token_prompt = vectorizer(prompt_string)
         else:
             logger.error("PRMOPT_PREPROCESSING_ERROR: unable to vectorize prompt, vectorizer not inistantiated")
-            return np.array([False])
+            return False
     except Exception as error:
         logger.error(f"PRMOPT_PREPROCESSING_ERROR: vectorizer failed on {prompt}")
         logger.error(error)
-        return np.array([False])
+        return False
     # try:
     #     token_prompt = tf.cast([token_prompt], dtype=tf.int64) # TODO change input to int8
     # except Exception as error:
