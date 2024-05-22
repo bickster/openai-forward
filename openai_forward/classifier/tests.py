@@ -4,7 +4,7 @@ import unittest
 class Test(unittest.TestCase):
 
     def test_vectorizer(self):
-        import data_preprocess
+        import openai_forward.classifier.data_preprocess as data_preprocess
         data_preprocess.load_vectorizer()
         self.assertIsNotNone(data_preprocess.vectorizer, msg="vectorizer unable to initialize")
 
@@ -15,7 +15,7 @@ class Test(unittest.TestCase):
     #     self.assertEqual(tensor_string, "[START] test [END]", msg="data_preprocess.append_start_end_tags returned incorrect string, returned {tensor_string}")
 
     def test_confirm_process(self):
-        import data_preprocess
+        import openai_forward.classifier.data_preprocess as data_preprocess
         message_pass = {
             'model': 'gpt-3.5',
             'tools': [
@@ -108,7 +108,7 @@ class Test(unittest.TestCase):
         self.assertFalse(data_preprocess.confirm_process_message(message_5), msg=f"{message_5} passed, should fail on tool_choice check")
 
     def test_preprocess_prompt(self):
-        import data_preprocess
+        import openai_forward.classifier.data_preprocess as data_preprocess
         data_preprocess.load_vectorizer()        
         tokens = data_preprocess.preprocess_prompt("This is a test prompt string")
         self.assertTrue(tokens[0][0] == 2, msg=f"First token incorrect; [START] == 2, not {tokens[0][0]}")
@@ -116,7 +116,7 @@ class Test(unittest.TestCase):
 
     def test_predict(self):
         # import tensorflow as tf
-        import model
+        import openai_forward.classifier.model as model
         import numpy as np
         prediction = model.predict(np.array([[n for n in range(32)]], dtype=np.int32))
         self.assertEqual(prediction, float(prediction), msg=f"model prediction not float. model predicted {prediction}")
@@ -124,15 +124,15 @@ class Test(unittest.TestCase):
         self.assertTrue(prediction >= 0, msg="Prediciton less than 0")
 
     def test_confidence(self):
-        import __init__
-        conf_1 = __init__._convert_confidence(.7)
-        conf_2 = __init__._convert_confidence(1 - .2)
+        import openai_forward.classifier as classifier
+        conf_1 = classifier._convert_confidence(.7)
+        conf_2 = classifier._convert_confidence(1 - .2)
         self.assertEqual(conf_1, .4, msg=f"Confidece incorrect, {conf_1} should be .4")
         self.assertEqual(conf_2, .6, msg=f"Confidece incorrect, {conf_2} should be .6")
 
     def test_prompt(self):
-        import __init__
-        response_1 = __init__.classify_prompt({
+        import openai_forward.classifier as classifier
+        response_1 = classifier.classify_prompt({
             'model': 'gpt-3.5',
             'messages': [
                 {
@@ -155,7 +155,7 @@ class Test(unittest.TestCase):
                     }
                 }
             ]})
-        response_2 = __init__.classify_prompt({
+        response_2 = classifier.classify_prompt({
             'model': 'gpt-3.5',
             'messages': [
                 {
