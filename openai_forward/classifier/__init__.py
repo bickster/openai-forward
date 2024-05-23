@@ -23,7 +23,7 @@ def classify_prompt(req_body):
                 
         # process prompt
         token_prompt = preprocess_prompt(prompt)
-        if token_prompt != False and token_prompt.shape[-1] > 0: # ignore if preprocessing fails or prompt is empty 
+        if type(token_prompt) != bool and token_prompt.shape[-1] > 0: # ignore if preprocessing fails or prompt is empty 
             
             # run inference
             prediction = predict(token_prompt)
