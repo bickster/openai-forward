@@ -28,8 +28,13 @@ def load_model():
 
 
 def predict(token_prompt):
-    interpreter.set_tensor(input_details[0]['index'], token_prompt)
-    interpreter.invoke()
-    prediction = interpreter.get_tensor(output_details[0]['index'])[0]
-    prediction = (sum(prediction) / len(prediction))[0] # process predcition to single value
+    try:
+        interpreter.set_tensor(input_details[0]['index'], token_prompt)
+        interpreter.invoke()
+        prediction = interpreter.get_tensor(output_details[0]['index'])[0]
+        prediction = (sum(prediction) / len(prediction))[0] # process predcition to single value
+    except Exception as error:
+        logger.error("MODEL_ERROR: model not inistantiated")
+        logger.error(error)
+        prediction = 0.5
     return prediction

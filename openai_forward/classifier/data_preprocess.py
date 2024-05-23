@@ -46,7 +46,7 @@ def load_vectorizer():
         # )
         with open_text(data, 'tokens.json') as file:
             tokens = file.read()
-        vectorizer = TextVectorization(list(json.loads(tokens).keys()))
+        vectorizer = TextVectorization(list(json.loads(tokens).keys()[:20000]))
     except Exception as error:
         logger.error("PRMOPT_PREPROCESSING_ERROR: vectorizer failed to initialize")
         logger.error(error)

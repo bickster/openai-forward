@@ -4,9 +4,12 @@ import unittest
 class Test(unittest.TestCase):
 
     def test_vectorizer(self):
-        import data_preprocess
-        data_preprocess.load_vectorizer()
-        self.assertIsNotNone(data_preprocess.vectorizer, msg="vectorizer unable to initialize")
+        from data_preprocess import TextVectorization
+        import data
+        with open_text(data, 'tokens.json') as file:
+            tokens = file.read()
+        vectorizer = TextVectorization(list(json.loads(tokens).keys()[:20000]))
+        self.assertIsNotNone(vectorizer, msg="vectorizer unable to initialize")
 
     # def test_append_tags(self):
     #     import data_preprocess
@@ -111,28 +114,40 @@ class Test(unittest.TestCase):
         import data_preprocess
         data_preprocess.load_vectorizer()        
         tokens = data_preprocess.preprocess_prompt("This is a test prompt string")
+        print(tokens)
         self.assertTrue(tokens[0][0] == 2, msg=f"First token incorrect; [START] == 2, not {tokens[0][0]}")
         self.assertTrue(tokens.shape == (1, 32), msg=f"Token prompt incorrect shape. {tokens.shape} != (1, 32)")
 
     def test_predict(self):
         # import tensorflow as tf
-        import model
+        import tflite_runtime.interpreter as tflite
+        from importlib.resources import open_binary
+        import data
         import numpy as np
-        prediction = model.predict(np.array([[n for n in range(32)]], dtype=np.int32))
+        with open_binary(data, 'classifier_model.tflite') as file:
+            model_binary = file.read()
+        interpreter = tflite.Interpreter(model_content=model_binary)
+        interpreter.allocate_tensors()
+        input_details = interpreter.get_input_details()
+        output_details = interpreter.get_output_details()
+        interpreter.set_tensor(np.array([[n for n in range(32)]], dtype=np.int32))
+        interpreter.invoke()
+        prediction = interpreter.get_tensor(output_details[0]['index'])[0]
+        prediction = (sum(prediction) / len(prediction))[0]
         self.assertEqual(prediction, float(prediction), msg=f"model prediction not float. model predicted {prediction}")
         self.assertTrue(prediction <= 1, msg="Prediciton greater than 1")
         self.assertTrue(prediction >= 0, msg="Prediciton less than 0")
 
     def test_confidence(self):
-        import classifier
-        conf_1 = classifier._convert_confidence(.7)
-        conf_2 = classifier._convert_confidence(1 - .2)
+        import __init__
+        conf_1 = __init__._convert_confidence(.7)
+        conf_2 = __init__._convert_confidence(1 - .2)
         self.assertEqual(conf_1, .4, msg=f"Confidece incorrect, {conf_1} should be .4")
         self.assertEqual(conf_2, .6, msg=f"Confidece incorrect, {conf_2} should be .6")
 
     def test_prompt(self):
-        import classifier
-        response_1 = classifier.classify_prompt({
+        import __init__
+        response_1 = __init__.classify_prompt({
             'model': 'gpt-3.5',
             'messages': [
                 {
@@ -155,7 +170,7 @@ class Test(unittest.TestCase):
                     }
                 }
             ]})
-        response_2 = classifier.classify_prompt({
+        response_2 = __init__.classify_prompt({
             'model': 'gpt-3.5',
             'messages': [
                 {
