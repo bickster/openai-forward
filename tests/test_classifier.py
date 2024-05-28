@@ -1,16 +1,17 @@
 import unittest
+import openai_forward.classifier as classifier
+import numpy as np
 
 
 class Test(unittest.TestCase):
 
     def test_vectorizer(self):
-        import openai_forward.classifier.data_preprocess as data_preprocess
-        data_preprocess.load_vectorizer()
+        classifier.data_preprocess.load_vectorizer()
 
         # with open_text(data, 'tokens.json') as file:
         #     tokens = file.read()
         # vectorizer = TextVectorization(list(json.loads(tokens).keys()[:20000]))
-        self.assertIsNotNone(data_preprocess.vectorizer, msg="vectorizer unable to initialize")
+        self.assertIsNotNone(classifier.data_preprocess.vectorizer, msg="vectorizer unable to initialize")
 
     # def test_append_tags(self):
     #     import data_preprocess
@@ -19,7 +20,6 @@ class Test(unittest.TestCase):
     #     self.assertEqual(tensor_string, "[START] test [END]", msg="data_preprocess.append_start_end_tags returned incorrect string, returned {tensor_string}")
 
     def test_confirm_process(self):
-        import openai_forward.classifier.data_preprocess as data_preprocess
         message_pass = {
             'model': 'gpt-3.5',
             'tools': [
@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
                 }
             ]
         }
-        self.assertTrue(data_preprocess.confirm_process_message(message_pass), msg=f"{message_pass} failed to pass")
+        self.assertTrue(classifier.data_preprocess.confirm_process_message(message_pass), msg=f"{message_pass} failed to pass")
         message_1 = {
             'model': 'dall-e-2',
             'tools': [
@@ -49,7 +49,7 @@ class Test(unittest.TestCase):
                 }
             ]
         }
-        self.assertFalse(data_preprocess.confirm_process_message(message_1), msg=f"{message_1} passed, should fail on model check")
+        self.assertFalse(classifier.data_preprocess.confirm_process_message(message_1), msg=f"{message_1} passed, should fail on model check")
         message_2 = {
             'model': 'gpt-3.5',
             'stools': [
@@ -64,7 +64,7 @@ class Test(unittest.TestCase):
                 }
             ]
         }
-        self.assertFalse(data_preprocess.confirm_process_message(message_2), msg=f"{message_2} passed, should fail on tools check")
+        self.assertFalse(classifier.data_preprocess.confirm_process_message(message_2), msg=f"{message_2} passed, should fail on tools check")
         message_3 = {
             'model': 'gpt-3.5',
             'stools': [
@@ -79,7 +79,7 @@ class Test(unittest.TestCase):
                 }
             ]
         }
-        self.assertFalse(data_preprocess.confirm_process_message(message_3), msg=f"{message_3} passed, should fail on type check")
+        self.assertFalse(classifier.data_preprocess.confirm_process_message(message_3), msg=f"{message_3} passed, should fail on type check")
         message_4 = {
             'model': 'gpt-3.5',
             'stools': [
@@ -94,7 +94,7 @@ class Test(unittest.TestCase):
                 }
             ]
         }
-        self.assertFalse(data_preprocess.confirm_process_message(message_4), msg=f"{message_4} passed, should fail on name check")
+        self.assertFalse(classifier.data_preprocess.confirm_process_message(message_4), msg=f"{message_4} passed, should fail on name check")
         message_5 = {
             'model': 'gpt-3.5',
             'stools': [
@@ -109,12 +109,11 @@ class Test(unittest.TestCase):
                 }
             ]
         }
-        self.assertFalse(data_preprocess.confirm_process_message(message_5), msg=f"{message_5} passed, should fail on tool_choice check")
+        self.assertFalse(classifier.data_preprocess.confirm_process_message(message_5), msg=f"{message_5} passed, should fail on tool_choice check")
 
     def test_preprocess_prompt(self):
-        import openai_forward.classifier.data_preprocess as data_preprocess
-        data_preprocess.load_vectorizer()        
-        tokens = data_preprocess.preprocess_prompt("This is a test prompt string")
+        classifier.data_preprocess.load_vectorizer()        
+        tokens = classifier.data_preprocess.preprocess_prompt("This is a test prompt string")
         self.assertTrue(tokens[0][0] == 2, msg=f"First token incorrect; [START] == 2, not {tokens}")
         self.assertTrue(tokens.shape == (1, 32), msg=f"Token prompt incorrect shape. {tokens} does not have shape = (1, 32)")
 
@@ -123,7 +122,7 @@ class Test(unittest.TestCase):
         # import tflite_runtime.interpreter as tflite
         # from importlib.resources import open_binary
         # import data
-        import numpy as np
+        
         # with open_binary(data, 'classifier_model.tflite') as file:
         #     model_binary = file.read()
         # interpreter = tflite.Interpreter(model_content=model_binary)
@@ -134,22 +133,19 @@ class Test(unittest.TestCase):
         # interpreter.invoke()
         # prediction = interpreter.get_tensor(output_details[0]['index'])[0]
         # prediction = (sum(prediction) / len(prediction))[0]
-        import openai_forward.classifier.model as model
-        model.load_model()
-        prediction = model.predict(np.array([n for n in range(32)], dtype=np.int32))
+        classifier.model.load_model()
+        prediction = classifier.model.predict(np.array([n for n in range(32)], dtype=np.int32))
         self.assertEqual(prediction, float(prediction), msg=f"model prediction not float. model predicted {prediction}")
         self.assertTrue(prediction <= 1, msg="Prediciton greater than 1")
         self.assertTrue(prediction >= 0, msg="Prediciton less than 0")
 
     def test_confidence(self):
-        from openai_forward.classifier import _convert_confidence
-        conf_1 = _convert_confidence(.7)
-        conf_2 = _convert_confidence(1 - .2)
+        conf_1 = classifier._convert_confidence(.7)
+        conf_2 = classifier._convert_confidence(1 - .2)
         self.assertEqual(conf_1, .4, msg=f"Confidece incorrect, {conf_1} should be .4")
         self.assertEqual(conf_2, .6, msg=f"Confidece incorrect, {conf_2} should be .6")
 
     def test_prompt(self):
-        import openai_forward.classifier as classifier
         classifier.init_classifier()
         response_1 = classifier.classify_prompt({
             'model': 'gpt-3.5',
