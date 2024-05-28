@@ -13,7 +13,7 @@ class Test(unittest.TestCase):
 
         with open_text(data, 'tokens.json') as file:
             tokens = file.read()
-        vectorizer = data_preprocess.TextVectorization(list(json.loads(tokens).keys()[:20000]))
+        vectorizer = data_preprocess.TextVectorization(list(json.loads(tokens).keys())[:20000])
         self.assertIsNotNone(vectorizer, msg="vectorizer unable to initialize")
 
         tokens = vectorizer("This is a test prompt string")
