@@ -1,5 +1,5 @@
 import unittest
-from .classifier import _convert_confidence
+from openai_forward.classifier.data
 import numpy as np
 
 
