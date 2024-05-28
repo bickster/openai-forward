@@ -1,5 +1,5 @@
 import unittest
-import classifier
+from .classifier import _convert_confidence
 import numpy as np
 
 
