@@ -15,7 +15,7 @@ def init_classifier():
 def classify_prompt(req_body):
     if confirm_process_message(req_body):
 
-        # retrieve most recent user message
+        # retrieve most recent user prompt
         prompt = ""
         for i in range(len(req_body['messages'])-1, -1, -1):
             if req_body['messages'][i]['role'] == 'user':

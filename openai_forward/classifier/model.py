@@ -13,14 +13,12 @@ def load_model():
     global input_details
     global output_details
     try:
-        # inp_file = (impresources.files(model) / 'classifier_model')
         with open_binary(data, 'classifier_model.tflite') as file:
             model_binary = file.read()
         interpreter = tflite.Interpreter(model_content=model_binary)
         interpreter.allocate_tensors()
         input_details = interpreter.get_input_details()
         output_details = interpreter.get_output_details()
-        # input_shape = input_details[0]['shape']
 
     except Exception as error:
         logger.error("MODEL_ERROR: unable to load model")

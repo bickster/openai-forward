@@ -1,4 +1,3 @@
-# import tensorflow as tf
 from importlib.resources import open_text
 import json
 import numpy as np
@@ -38,21 +37,12 @@ def load_vectorizer():
     global vectorizer
     try:
         import openai_forward.classifier.data as data
-        # tokens = list(json.loads(open_text(data, 'tokens.json').read()).keys())
-        # vectorizer = tf.keras.layers.TextVectorization(
-        #     standardize=append_start_end_tags,
-        #     vocabulary=tokens[:20000], # TODO 
-        #     output_sequence_length=32, # editable
-        # )
         with open_text(data, 'tokens.json') as file:
             tokens = file.read()
         vectorizer = TextVectorization(list(json.loads(tokens).keys())[:20000])
     except Exception as error:
         logger.error("PRMOPT_PREPROCESSING_ERROR: vectorizer failed to initialize")
         logger.error(error)
-
-# def append_start_end_tags(string):
-#     return tf.strings.join(['[START] ', string, ' [END]'])
 
 def confirm_process_message(req_body):
     if 'model' in req_body:
@@ -80,10 +70,4 @@ def preprocess_prompt(prompt_string):
         logger.error(f"PRMOPT_PREPROCESSING_ERROR: vectorizer failed on {prompt}")
         logger.error(error)
         return False
-    # try:
-    #     token_prompt = tf.cast([token_prompt], dtype=tf.int64) # TODO change input to int8
-    # except Exception as error:
-    #     logger.error(f"PRMOPT_PREPROCESSING_ERROR: unable to cast token_prompt to tensor. token_prompt={token_prompt}. current type is int64.")
-    #     logger.error(error)
-    #     return False
     return token_prompt
