@@ -1,5 +1,5 @@
 import unittest
-from openai_forward.classifier.data
+import openai_forward.classifier.data
 import numpy as np
 
 
