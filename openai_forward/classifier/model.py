@@ -2,6 +2,7 @@ import tflite_runtime.interpreter as tflite
 from importlib.resources import open_binary
 import openai_forward.classifier.data as data
 from loguru import logger
+import numpy as np
 
 
 interpreter = None
