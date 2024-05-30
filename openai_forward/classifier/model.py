@@ -34,5 +34,5 @@ def predict(token_prompt):
     except Exception as error:
         logger.error("MODEL_ERROR: model not inistantiated")
         logger.error(error)
-        prediction = 0.5
+        prediction = 0
     return prediction

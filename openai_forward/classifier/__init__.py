@@ -5,9 +5,6 @@ from loguru import logger
 import json
 
 
-def _convert_confidence(pred):
-    return (((pred * 100) - 50) * 2) / 100
-
 def init_classifier():
     load_vectorizer()
     load_model()
@@ -33,7 +30,7 @@ def classify_prompt(req_body):
 
             # prediction is image
             if prediction > IMAGE_THRESHOLD:
-                logger.info(f"Model prediction: IMAGE at {_convert_confidence(prediction)*100:.2f}% confidence.")
+                logger.info(f"Model prediction: IMAGE at {prediction:.2f} confidence.")
                 # add the tool_choice parameter to generateImage
                 for t in range(len(req_body['tools'])):
                     if req_body['tools'][t]['type'] == 'function':
@@ -41,8 +38,8 @@ def classify_prompt(req_body):
                             req_body['tools'][t]['function']['parameters']['tool_choice'] = { 'type': 'function', 'function': { 'name': 'generateImage' } }
 
             # prediction is text
-            elif 1.0 - prediction > TEXT_THRESHOLD:
-                logger.info(f"Model prediction: TEXT at {_convert_confidence(1.0-prediction)*100:.2f}% confidence.")
+            elif prediction < -TEXT_THRESHOLD:
+                logger.info(f"Model prediction: TEXT at {prediction:.2f} confidence.")
                 # remove the generateImage function from tools
                 for t in range(len(req_body['tools'])):
                     if req_body['tools'][t]['type'] == 'function':
@@ -52,10 +49,10 @@ def classify_prompt(req_body):
             # prediction is unsure
             else: # for logging purposes
                 confidence = ''
-                if prediction > 0.5:
-                    confidence = f"only {_convert_confidence(prediction)*100:.2f}% confident prompt is requesting IMAGE."
-                elif prediction < 0.5:
-                    confidence = f"only {_convert_confidence(1.0-prediction)*100:.2f}% confident prompt is requesting TEXT."
+                if prediction > 0:
+                    confidence = f"only {prediction:.2f} confident prompt is requesting IMAGE."
+                elif prediction < 0:
+                    confidence = f"only {prediction:.2f} confident prompt is requesting TEXT."
                 else: # this is highly unlikely unless using rounding for confidence
                     confidence = "split 50% between IMAGE and TEXT."
                 logger.info(f"Model prediction: UNSURE, model is {confidence}")

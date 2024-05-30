@@ -9,7 +9,6 @@ class Test(unittest.TestCase):
         from importlib.resources import open_text
         import data
         import json
-        # classifier.data_preprocess.load_vectorizer()
 
         with open_text(data, 'tokens.json') as file:
             tokens = file.read()
