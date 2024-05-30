@@ -23,6 +23,8 @@ class TextVectorization:
                 tokens.append(self.vocabulary.index(word))
             else:
                 tokens.append(1)
+            if len(tokens) >= self.output_length:
+                break
         if tokens[-1] == 1: # assumes last word was spliced if [UNK]
             tokens = tokens[:-1]
         while len(tokens) < self.output_length:
