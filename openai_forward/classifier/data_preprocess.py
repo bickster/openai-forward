@@ -39,7 +39,7 @@ def load_vectorizer():
         import openai_forward.classifier.data as data
         with open_text(data, 'tokens.json') as file:
             tokens = file.read()
-        vectorizer = TextVectorization(list(json.loads(tokens).keys())[:10000]) # this vocab size returns best results for current data training
+        vectorizer = TextVectorization(list(json.loads(tokens))[:10000]) # this vocab size returns best results for current data training
     except Exception as error:
         logger.error("PRMOPT_PREPROCESSING_ERROR: vectorizer failed to initialize")
         logger.error(error)
