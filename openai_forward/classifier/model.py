@@ -29,8 +29,8 @@ def predict(token_prompt):
     try:
         interpreter.set_tensor(input_details[0]['index'], token_prompt)
         interpreter.invoke()
-        prediction = interpreter.get_tensor(output_details[0]['index'])[0]
-        prediction = (sum(prediction) / len(prediction))[0] # process predcition to single value
+        prediction = interpreter.get_tensor(output_details[0]['index'])
+        prediction = np.average(prediction) # process predcition to single value
     except Exception as error:
         logger.error("MODEL_ERROR: model not inistantiated")
         logger.error(error)
