@@ -17,6 +17,7 @@ def classify_prompt(req_body):
         for i in range(len(req_body['messages'])-1, -1, -1):
             if req_body['messages'][i]['role'] == 'user':
                 prompt = req_body['messages'][i]['content']
+                break
 
         # process prompt
         token_prompt = preprocess_prompt(prompt)
