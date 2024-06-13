@@ -63,6 +63,14 @@ class OpenaiBase:
                 detail=f"Forbidden",
             )
 
+    def check_classifier_header(self, header: dict):
+        try:
+            if header["X-Classify-Prompt"]:
+                return True
+        except KeyError:
+            pass
+        return False
+
     @classmethod
     async def aiter_bytes(cls, r: httpx.Response, route_path: str, uid: str):
         bytes_ = b""
@@ -98,7 +106,11 @@ class OpenaiBase:
         url_path = request.url.path
         url_path = url_path[len(cls.ROUTE_PREFIX):]
         url = httpx.URL(path=url_path, query=request.url.query.encode("utf-8"))
+
+        # extract header
         headers = dict(request.headers)
+        send_to_classifier = self.check_classifier_header(headers)
+
         auth = headers.pop("authorization", "")
         auth_headers_dict = {"Content-Type": "application/json", "Authorization": auth}
         auth_prefix = "Bearer "
@@ -122,11 +134,17 @@ class OpenaiBase:
                     f"log chat error:\n{request.client.host=} {request.method=}: {e}"
                 )
 
+        # classify prompt
+        if send_to_classifier:
+            req_body = classify_prompt(await request.json())
+        else:
+            req_body = await request.json()
+            
         req = client.build_request(
             request.method,
             url,
             headers=auth_headers_dict,
-            content=classify_prompt(await request.json()),
+            content=req_body,
             timeout=cls.timeout,
         )
         try:
