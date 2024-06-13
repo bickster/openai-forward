@@ -46,7 +46,7 @@ def load_vectorizer():
         logger.error("PRMOPT_PREPROCESSING_ERROR: vectorizer failed to initialize")
         logger.error(error)
 
-def confirm_process_message(req_body):
+def message_requires_model(req_body):
     if 'model' in req_body:
         if 'gpt' in req_body['model']: # only two possible models, either gpt or dall-e. ignore if dall-e
             if 'tools' in req_body:

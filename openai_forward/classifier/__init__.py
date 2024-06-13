@@ -1,4 +1,4 @@
-from .data_preprocess import confirm_process_message, preprocess_prompt, load_vectorizer
+from .data_preprocess import message_requires_model, preprocess_prompt, load_vectorizer
 from .model import predict, load_model
 from .global_vars import IMAGE_THRESHOLD, TEXT_THRESHOLD
 from loguru import logger
@@ -10,7 +10,7 @@ def init_classifier():
     load_model()
 
 def classify_prompt(req_body):
-    if confirm_process_message(req_body):
+    if message_requires_model(req_body):
 
         # retrieve most recent user prompt
         prompt = ""
