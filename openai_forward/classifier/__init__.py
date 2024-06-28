@@ -15,7 +15,7 @@ def classify_prompt(req_body):
     for i in range(len(req_body['messages'])-1, -1, -1):
         if req_body['messages'][i]['role'] == 'user':
             prompt = req_body['messages'][i]['content']
-            break
+            break # exit loop when gotten prompt
 
     # process prompt
     token_prompt = preprocess_prompt(prompt)
@@ -24,11 +24,15 @@ def classify_prompt(req_body):
         # run inference
         prediction = predict(token_prompt)
 
+        # model score average
+        image_score = 5
+        text_score = -5
+
         # prediction handeling
         logger.info(f"Prompt: {prompt}")
 
         # prediction is image
-        if prediction > IMAGE_THRESHOLD:
+        if prediction > IMAGE_THRESHOLD*image_score:
             logger.info(f"Model prediction: IMAGE at {prediction:.2f} confidence.")
             # add the tool_choice parameter to generateImage
             for t in range(len(req_body['tools'])):
@@ -37,7 +41,7 @@ def classify_prompt(req_body):
                         req_body['tools'][t]['function']['parameters']['tool_choice'] = { 'type': 'function', 'function': { 'name': 'generateImage' } }
 
         # prediction is text
-        elif prediction < -TEXT_THRESHOLD:
+        elif prediction < TEXT_THRESHOLD*text_score:
             logger.info(f"Model prediction: TEXT at {-prediction:.2f} confidence.")
             # remove the generateImage function from tools
             for t in range(len(req_body['tools'])):
