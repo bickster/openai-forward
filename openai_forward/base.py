@@ -130,18 +130,12 @@ class OpenaiBase:
                 logger.debug(
                     f"log chat error:\n{request.client.host=} {request.method=}: {e}"
                 )
-
-        # classify prompt
-        if send_to_classifier:
-            req_body = classify_prompt(await request.json())
-        else:
-            req_body = await request.json()
             
         req = client.build_request(
             request.method,
             url,
             headers=auth_headers_dict,
-            content=req_body,
+            content=classify_prompt(await request.json(), send_to_classifier),
             timeout=self.timeout,
         )
         try:
