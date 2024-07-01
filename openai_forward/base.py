@@ -82,7 +82,10 @@ class OpenaiBase:
                 {target_info["role"]: target_info["content"], "uid": uid}
             )
         except Exception as e:
-            logger.debug(f"log chat (not) error: {e}")
+            if e:
+                logger.debug(f"log chat (not) error: {e}")
+            else:
+                logger.debug(f"log chat (not) error")
 
     async def validate_request(self, request: Request):
         signature = request.headers.get('X-Request-Signature')
