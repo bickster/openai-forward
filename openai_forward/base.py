@@ -71,62 +71,59 @@ class OpenaiBase:
             pass
         return False
 
-    @classmethod
-    async def aiter_bytes(cls, r: httpx.Response, route_path: str, uid: str):
+    async def aiter_bytes(self, r: httpx.Response, route_path: str, uid: str):
         bytes_ = b""
         async for chunk in r.aiter_bytes():
             bytes_ += chunk
             yield chunk
         try:
-            target_info = cls.chatsaver.parse_bytes_to_content(bytes_, route_path)
-            cls.chatsaver.add_chat(
+            target_info = self.chatsaver.parse_bytes_to_content(bytes_, route_path)
+            self.chatsaver.add_chat(
                 {target_info["role"]: target_info["content"], "uid": uid}
             )
         except Exception as e:
             logger.debug(f"log chat (not) error:\n{e=}")
 
-    @classmethod
-    async def validate_request(cls, request: Request):
+    async def validate_request(self, request: Request):
         signature = request.headers.get('X-Request-Signature')
         if not signature:
             return False
         request_data = await request.body()
-        expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
+        expected_signature = hmac.new(self.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
 
-    @classmethod
-    async def _reverse_proxy(cls, request: Request):
-        if not await cls.validate_request(request):
+    async def _reverse_proxy(self, request: Request):
+        if not await self.validate_request(request):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Forbidden",
             )
 
-        client = httpx.AsyncClient(base_url=cls.BASE_URL, http1=True, http2=False)
+        client = httpx.AsyncClient(base_url=self.BASE_URL, http1=True, http2=False)
         url_path = request.url.path
-        url_path = url_path[len(cls.ROUTE_PREFIX):]
+        url_path = url_path[len(self.ROUTE_PREFIX):]
         url = httpx.URL(path=url_path, query=request.url.query.encode("utf-8"))
 
         # extract header
         headers = dict(request.headers)
-        send_to_classifier = cls.check_classifier_header(headers)
+        send_to_classifier = self.check_classifier_header(headers)
 
         auth = headers.pop("authorization", "")
         auth_headers_dict = {"Content-Type": "application/json", "Authorization": auth}
         auth_prefix = "Bearer "
-        if cls._no_auth_mode or auth and auth[len(auth_prefix):] in cls._FWD_KEYS:
-            auth = auth_prefix + next(cls._cycle_api_key)
+        if self._no_auth_mode or auth and auth[len(auth_prefix):] in self._FWD_KEYS:
+            auth = auth_prefix + next(self._cycle_api_key)
             auth_headers_dict["Authorization"] = auth
 
         log_chat_completions = False
         uid = None
-        if cls._LOG_CHAT and request.method == "POST":
+        if self._LOG_CHAT and request.method == "POST":
             try:
-                chat_info = await cls.chatsaver.parse_payload_to_content(
+                chat_info = await self.chatsaver.parse_payload_to_content(
                     request, route_path=url_path
                 )
                 if chat_info:
-                    cls.chatsaver.add_chat(chat_info)
+                    self.chatsaver.add_chat(chat_info)
                     uid = chat_info.get("uid")
                     log_chat_completions = True
             except Exception as e:
@@ -145,14 +142,14 @@ class OpenaiBase:
             url,
             headers=auth_headers_dict,
             content=req_body,
-            timeout=cls.timeout,
+            timeout=self.timeout,
         )
         try:
             r = await client.send(req, stream=True)
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
             error_info = (
                 f"{type(e)}: {e} | "
-                f"Please check if host={request.client.host} can access [{cls.BASE_URL}] successfully?"
+                f"Please check if host={request.client.host} can access [{self.BASE_URL}] successfully?"
             )
             logger.error(error_info)
             raise HTTPException(
@@ -165,7 +162,7 @@ class OpenaiBase:
             )
 
         aiter_bytes = (
-            cls.aiter_bytes(r, url_path, uid)
+            self.aiter_bytes(r, url_path, uid)
             if log_chat_completions
             else r.aiter_bytes()
         )
