@@ -65,7 +65,7 @@ class OpenaiBase:
 
     def check_classifier_header(self, header: dict):
         try:
-            if header["x-classify-prompt"]:
+            if header["x-classify-prompt"] == 'True':
                 return True
         except KeyError:
             pass
