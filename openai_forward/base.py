@@ -82,7 +82,7 @@ class OpenaiBase:
                 {target_info["role"]: target_info["content"], "uid": uid}
             )
         except Exception as e:
-            if e:
+            if e != None:
                 logger.debug(f"log chat (not) error: {e}")
             else:
                 logger.debug(f"log chat (not) error")
