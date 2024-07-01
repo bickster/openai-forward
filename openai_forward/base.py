@@ -109,7 +109,7 @@ class OpenaiBase:
 
         # extract header
         headers = dict(request.headers)
-        send_to_classifier = self.check_classifier_header(headers)
+        send_to_classifier = cls.check_classifier_header(headers)
 
         auth = headers.pop("authorization", "")
         auth_headers_dict = {"Content-Type": "application/json", "Authorization": auth}
