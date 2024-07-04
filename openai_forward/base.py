@@ -86,7 +86,8 @@ class OpenaiBase:
         expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
 
-    async def _reverse_proxy(self, request: Request):
+    @classmethod
+    async def _reverse_proxy(cls, request: Request):
         if not await cls.validate_request(request):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
