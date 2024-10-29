@@ -14,6 +14,7 @@ from .tool import env2list
 import hmac
 import hashlib
 
+from .routers.image_gen_platform import ImageGenPlatform
 
 class OpenaiBase:
     BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com").strip()
@@ -26,6 +27,7 @@ class OpenaiBase:
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
+    _IMAGE_GEN_PLATFORM = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -34,8 +36,10 @@ class OpenaiBase:
             ROUTE_PREFIX = "/" + ROUTE_PREFIX
     timeout = 600
 
+    IMAGE_GEN_PLATFORM = ImageGenPlatform[_IMAGE_GEN_PLATFORM]
+
     print_startup_info(
-        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT
+        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORM
     )
     if _LOG_CHAT:
         setting_log(save_file=False)
