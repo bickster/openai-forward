@@ -4,50 +4,43 @@ from fastapi import HTTPException, Request, status
 from loguru import logger
 import json
 import base64
-
+import os
 import time
 
+BASE_URL = "https://api.bfl.ml/"
+BFL_API_KEY = os.environ.get("BFL_API_KEY", None)
+
 class FluxBase:
-    BASE_URL = "https://api.bfl.ml/"
-    API_ENDPOINT = "v1/flux-pro-1.1"
-    POLL_ENDPOINT = "v1/get_result"
+    API_ENDPOINT = ""
+    POLL_ENDPOINT = ""
     ACCEPT = ""
 
-    timeout = 600
-
-    def __init__(self, apiKey):
-        self.apiKey = apiKey
+    TIMEOUT = 600
 
     @classmethod
-    def INPUT_TYPES(cls):
-        return cls.INPUT_SPEC
-
-    RETURN_TYPES = ("IMAGE",)
-    FUNCTION = "call"
-    CATEGORY = "Flux"
-
-    async def generate_image(self, request: Request):
+    async def generate_image(cls, request: Request):
         headers = {
-            "Accept": self.ACCEPT,
-            "x-key": self.apiKey,
+            "Accept": cls.ACCEPT,
+            "x-key": BFL_API_KEY,
         }
 
         if headers["x-key"] is None:
             raise HTTPException(
-                status_code=status.HTTP_418_IM_A_TEAPOT,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Invalid configuration.",
             )
 
-        image_id = await self._image_request(request, headers)
+        image_id = await cls._image_request(request, headers)
 
-        image_url, prompt = await self._poll_for_result(image_id, headers)
-        image_base64 = await self._download_image(image_url)
+        image_url, prompt = await cls._poll_for_result(image_id, headers)
+        image_base64 = await cls._download_image(image_url)
         return (
             image_base64,
             prompt
         )
 
-    async def _image_request(self, request: Request, headers):
+    @classmethod
+    async def _image_request(cls, request: Request, headers):
         data = await request.json()
         body = {
             "prompt": data.get('prompt'),
@@ -56,15 +49,15 @@ class FluxBase:
             "prompt_upsampling": True
         }
 
-        client = httpx.AsyncClient(base_url=self.BASE_URL, http1=True, http2=False)
-        url = httpx.URL(path=self.API_ENDPOINT, query=request.url.query.encode("utf-8"))
+        client = httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False)
+        url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
 
         req = client.build_request(
             request.method,
             url,
             headers=headers,
             content=json.dumps(body),
-            timeout=self.timeout,
+            timeout=cls.TIMEOUT,
         )
 
         try:
@@ -72,7 +65,7 @@ class FluxBase:
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
             error_info = (
                 f"{type(e)}: {e} | "
-                f"Please check if host={request.client.host} can access [{self.BASE_URL}] successfully?"
+                f"Please check if host={request.client.host} can access [{BASE_URL}] successfully?"
             )
             logger.error(error_info)
             raise HTTPException(
@@ -97,17 +90,18 @@ class FluxBase:
 
         return imageId
 
-    async def _poll_for_result(self, id, headers):
+    @classmethod
+    async def _poll_for_result(cls, id, headers):
         timeout, start_time = 240, time.time()
         while True:
-            client = httpx.AsyncClient(base_url=self.BASE_URL, http1=True, http2=False)
-            url = httpx.URL(path=self.POLL_ENDPOINT, query=f"id={id}".encode("utf-8"))
+            client = httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False)
+            url = httpx.URL(path=cls.POLL_ENDPOINT, query=f"id={id}".encode("utf-8"))
 
             req = client.build_request(
                 "GET",
                 url,
                 headers=headers,
-                timeout=self.timeout,
+                timeout=cls.TIMEOUT,
             )
 
             try:
@@ -142,8 +136,8 @@ class FluxBase:
                     status_code=status.HTTP_502_BAD_GATEWAY, detail=f"API Error: {r.json()}"
                 )
 
-    async def _download_image(self, imageUrl):
-        print(f"Downloading {imageUrl}")
+    @classmethod
+    async def _download_image(cls, imageUrl):
         r = httpx.get(imageUrl)
         if r.status_code == status.HTTP_200_OK:
             image_bytes = r.content

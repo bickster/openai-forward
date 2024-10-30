@@ -30,7 +30,6 @@ class OpenaiBase:
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
     _IMAGE_GEN_PLATFORM = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
-    BFL_API_KEY = os.environ.get("BFL_API_KEY", None)
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -146,7 +145,7 @@ class OpenaiBase:
     async def to_flux(cls, client, request, url_path):
         logger.info("Forwarding image request to Flux")
 
-        flux = FluxPro11(cls.BFL_API_KEY)
+        flux = FluxPro11()
         image_base64, prompt = await flux.generate_image(request)
 
         def noop():
