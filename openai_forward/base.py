@@ -3,7 +3,7 @@ from itertools import cycle
 
 import httpx
 from fastapi import HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from loguru import logger
 from starlette.background import BackgroundTask
 
@@ -13,8 +13,10 @@ from .tool import env2list
 
 import hmac
 import hashlib
+import time
 
 from .routers.image_gen_platform import ImageGenPlatform
+from .flux.bfl_api import FluxPro11
 
 class OpenaiBase:
     BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com").strip()
@@ -28,6 +30,7 @@ class OpenaiBase:
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
     _IMAGE_GEN_PLATFORM = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
+    BFL_API_KEY = os.environ.get("BFL_API_KEY", None)
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -105,29 +108,55 @@ class OpenaiBase:
                 case ImageGenPlatform.dalle3:
                     aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
+                    return StreamingResponse(
+                        aiter_bytes,
+                        status_code=status_code,
+                        media_type=media_type,
+                        background=background
+                    )
+
                 case ImageGenPlatform.flux1_1:
-                    aiter_bytes, status_code, media_type, background = await cls.to_flux(client, request, url_path)
+                    image_base64, prompt, status_code, media_type, background = await cls.to_flux(client, request, url_path)
+
+                    return JSONResponse(
+                        content={
+                            "created": int(time.time()),
+                            "data": [
+                                {
+                                    "b64_json": image_base64,
+                                    "revised_prompt": prompt
+                                }
+                            ]
+                        },
+                        status_code=status_code,
+                        media_type=media_type,
+                        background=background
+                    )
         else:
             aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
-        return StreamingResponse(
-            aiter_bytes,
-            status_code=status_code,
-            media_type=media_type,
-            background=background
-        )
+            return StreamingResponse(
+                aiter_bytes,
+                status_code=status_code,
+                media_type=media_type,
+                background=background
+            )
 
     @classmethod
     async def to_flux(cls, client, request, url_path):
         logger.info("Forwarding image request to Flux")
 
+        flux = FluxPro11(cls.BFL_API_KEY)
+        image_base64, prompt = await flux.generate_image(request)
+
         def noop():
             pass
 
         return (
-            b"",
-            418,
-            "text/plain",
+            image_base64,
+            prompt,
+            200,
+            "application/json",
             BackgroundTask(noop)
         )
 
