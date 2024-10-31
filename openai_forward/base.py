@@ -3,7 +3,7 @@ from itertools import cycle
 
 import httpx
 from fastapi import HTTPException, Request, status
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from starlette.background import BackgroundTask
 
@@ -115,21 +115,13 @@ class OpenaiBase:
                     )
 
                 case ImageGenPlatform.flux1_1:
-                    image_base64, prompt, status_code, media_type, background = await cls.to_flux(client, request, url_path)
+                    json_response, content_length = await cls.to_flux(client, request, url_path)
 
-                    return JSONResponse(
-                        content={
-                            "created": int(time.time()),
-                            "data": [
-                                {
-                                    "b64_json": image_base64,
-                                    "revised_prompt": prompt
-                                }
-                            ]
-                        },
-                        status_code=status_code,
-                        media_type=media_type,
-                        background=background
+                    return StreamingResponse(
+                        json_response,
+                        status_code=200,
+                        headers={"Content-Length": str(content_length)},
+                        media_type="application/json"
                     )
         else:
             aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
@@ -146,18 +138,7 @@ class OpenaiBase:
         logger.info("Forwarding image request to Flux")
 
         flux = FluxPro11()
-        image_base64, prompt = await flux.generate_image(request)
-
-        def noop():
-            pass
-
-        return (
-            image_base64,
-            prompt,
-            200,
-            "application/json",
-            BackgroundTask(noop)
-        )
+        return await flux.generate_image(request)
 
     @classmethod
     async def to_openai(cls, client, request, url_path):
