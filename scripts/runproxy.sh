@@ -2,5 +2,6 @@
 
 echo "Starting Proxy"
 cd /home/ec2-user/openai-forward
+source .venv/bin/activate
 python3 -m openai_forward run --port=9999 --workers=1 --log_chat=true
 
