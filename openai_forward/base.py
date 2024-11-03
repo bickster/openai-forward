@@ -127,9 +127,11 @@ class OpenaiBase:
                     except ContentModerationError as e:
                         return JSONResponse(
                             content={
-                                "code": "content_policy_violation",
-                                "message": e.message,
-                                "type": "content_policy_violation"
+                                "error": {
+                                    "code": "content_policy_violation",
+                                    "message": e.message,
+                                    "type": "content_policy_violation"
+                                }
                             },
                             status_code=200
                         )
