@@ -93,12 +93,14 @@ class FluxBase:
                 )
 
             if r.status_code != 200:
+                logger.exception(f"{r.status_code}:{r.json()}")
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Error from Flux call: {r.status_code}"
                 )
 
             imageId = r.json().get('id')
             if imageId is None:
+                logger.exception("No Image ID returned from FLUX")
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No id returned"
                 )
@@ -144,11 +146,13 @@ class FluxBase:
                     elif r.status_code == status.HTTP_202_ACCEPTED:
                         time.sleep(5)  # Use async sleep
                     elif time.time() - start_time > timeout:
+                        logger.exception("Polling timed out")
                         raise HTTPException(
                             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
                             detail="Polling timed out"
                         )
                     else:
+                        logger.exception(f"API Error:{r.json()}")
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"API Error: {r.json()}"
@@ -186,6 +190,7 @@ class FluxBase:
                     yield JSON_SUFFIX
 
                 else:
+                    logger.exception(f"Failed to download image")
                     raise HTTPException(
                         status_code=status.HTTP_502_BAD_GATEWAY,
                         detail=f"Failed to download image",
