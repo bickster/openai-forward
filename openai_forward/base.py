@@ -3,7 +3,7 @@ from itertools import cycle
 
 import httpx
 from fastapi import HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from loguru import logger
 from starlette.background import BackgroundTask
 
@@ -13,10 +13,10 @@ from .tool import env2list
 
 import hmac
 import hashlib
-import time
 
 from .routers.image_gen_platform import ImageGenPlatform
-from .flux.bfl_api import FluxPro11
+from .flux.bfl_api import FluxPro11, ContentModerationError
+
 
 class OpenaiBase:
     BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com").strip()
@@ -115,14 +115,24 @@ class OpenaiBase:
                     )
 
                 case ImageGenPlatform.flux1_1:
-                    json_response, content_length = await cls.to_flux(client, request, url_path)
+                    try:
+                        json_response, content_length = await cls.to_flux(client, request, url_path)
 
-                    return StreamingResponse(
-                        json_response,
-                        status_code=200,
-                        headers={"Content-Length": str(content_length)},
-                        media_type="application/json"
-                    )
+                        return StreamingResponse(
+                            json_response,
+                            status_code=200,
+                            headers={"Content-Length": str(content_length)},
+                            media_type="application/json"
+                        )
+                    except ContentModerationError as e:
+                        return JSONResponse(
+                            content={
+                                "code": "content_policy_violation",
+                                "message": e.message,
+                                "type": "content_policy_violation"
+                            },
+                            status_code=200
+                        )
         else:
             aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 

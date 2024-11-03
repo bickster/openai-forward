@@ -132,11 +132,13 @@ class FluxBase:
                                 json_response.get('result').get('sample'),
                                 json_response.get('result').get('prompt')
                             )
+                        elif json_response.get('status') == "Content Moderated":
+                            raise ContentModerationError("Moderated")
                         elif json_response.get('status') == "Pending":
                             time.sleep(5)  # Use async sleep to avoid blocking
                         else:
                             raise HTTPException(
-                                status_code=status.HTTP_502_BAD_GATEWAY,
+                                status_code=status.HTTP_418_IM_A_TEAPOT,
                                 detail=f"API Error: {json_response}"
                             )
                     elif r.status_code == status.HTTP_202_ACCEPTED:
@@ -217,8 +219,12 @@ class FluxBase:
         )
         return total_content_length
 
-
 class FluxPro11(FluxBase):
     API_ENDPOINT = "v1/flux-pro-1.1"
     POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "image/*"
+
+class ContentModerationError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
