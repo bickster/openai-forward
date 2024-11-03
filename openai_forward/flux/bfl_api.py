@@ -15,8 +15,8 @@ JSON_PREFIX = f'''{{
     "data": [
         {{
             "b64_json": "'''
-JSON_MID = '", "revised_prompt": "'
-JSON_SUFFIX = f'''"
+JSON_MID = '", "revised_prompt": '
+JSON_SUFFIX = f'''
         }}
     ]
 }}
@@ -45,6 +45,9 @@ class FluxBase:
         image_id = await cls._image_request(request, headers)
 
         image_url, prompt = await cls._poll_for_result(image_id, headers)
+
+        # Escape special characters in prompt
+        prompt = json.dumps(prompt)
 
         return (
             cls._stream_image(image_url, prompt),
