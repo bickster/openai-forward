@@ -3,7 +3,7 @@ from itertools import cycle
 
 import httpx
 from fastapi import HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from loguru import logger
 from starlette.background import BackgroundTask
 
@@ -13,6 +13,9 @@ from .tool import env2list
 
 import hmac
 import hashlib
+
+from .routers.image_gen_platform import ImageGenPlatform
+from .flux.bfl_api import FluxPro11, ContentModerationError
 
 
 class OpenaiBase:
@@ -26,6 +29,7 @@ class OpenaiBase:
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
+    _IMAGE_GEN_PLATFORM = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -34,8 +38,10 @@ class OpenaiBase:
             ROUTE_PREFIX = "/" + ROUTE_PREFIX
     timeout = 600
 
+    IMAGE_GEN_PLATFORM = ImageGenPlatform[_IMAGE_GEN_PLATFORM]
+
     print_startup_info(
-        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT
+        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORM
     )
     if _LOG_CHAT:
         setting_log(save_file=False)
@@ -95,6 +101,60 @@ class OpenaiBase:
         client = httpx.AsyncClient(base_url=cls.BASE_URL, http1=True, http2=False)
         url_path = request.url.path
         url_path = url_path[len(cls.ROUTE_PREFIX):]
+
+        if url_path.endswith("images/generations"):
+            match cls.IMAGE_GEN_PLATFORM:
+                case ImageGenPlatform.dalle3:
+                    aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+
+                    return StreamingResponse(
+                        aiter_bytes,
+                        status_code=status_code,
+                        media_type=media_type,
+                        background=background
+                    )
+
+                case ImageGenPlatform.flux1_1:
+                    try:
+                        json_response, content_length = await cls.to_flux(client, request, url_path)
+
+                        return StreamingResponse(
+                            json_response,
+                            status_code=200,
+                            headers={"Content-Length": str(content_length)},
+                            media_type="application/json"
+                        )
+                    except ContentModerationError as e:
+                        return JSONResponse(
+                            content={
+                                "error": {
+                                    "code": "content_policy_violation",
+                                    "message": e.message,
+                                    "type": "content_policy_violation"
+                                }
+                            },
+                            status_code=200
+                        )
+        else:
+            aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+
+            return StreamingResponse(
+                aiter_bytes,
+                status_code=status_code,
+                media_type=media_type,
+                background=background
+            )
+
+    @classmethod
+    async def to_flux(cls, client, request, url_path):
+        logger.info("Forwarding image request to Flux")
+
+        flux = FluxPro11()
+        return await flux.generate_image(request)
+
+    @classmethod
+    async def to_openai(cls, client, request, url_path):
+        # Configure URL
         url = httpx.URL(path=url_path, query=request.url.query.encode("utf-8"))
         headers = dict(request.headers)
         auth = headers.pop("authorization", "")
@@ -103,7 +163,6 @@ class OpenaiBase:
         if cls._no_auth_mode or auth and auth[len(auth_prefix):] in cls._FWD_KEYS:
             auth = auth_prefix + next(cls._cycle_api_key)
             auth_headers_dict["Authorization"] = auth
-
         log_chat_completions = False
         uid = None
         if cls._LOG_CHAT and request.method == "POST":
@@ -119,7 +178,6 @@ class OpenaiBase:
                 logger.debug(
                     f"log chat error:\n{request.client.host=} {request.method=}: {e}"
                 )
-
         req = client.build_request(
             request.method,
             url,
@@ -143,15 +201,10 @@ class OpenaiBase:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e
             )
-
+        # Get bytes from response
         aiter_bytes = (
             cls.aiter_bytes(r, url_path, uid)
             if log_chat_completions
             else r.aiter_bytes()
         )
-        return StreamingResponse(
-            aiter_bytes,
-            status_code=r.status_code,
-            media_type=r.headers.get("content-type"),
-            background=BackgroundTask(r.aclose),
-        )
+        return aiter_bytes, r.status_code, r.headers.get("content-type"), BackgroundTask(r.aclose)
