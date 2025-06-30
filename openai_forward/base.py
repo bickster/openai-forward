@@ -15,7 +15,7 @@ import hmac
 import hashlib
 
 from .routers.image_gen_platform import ImageGenPlatform, ImageEditPlatform
-from .flux.bfl_api import FluxPro11, ContentModerationError
+from .flux.bfl_api import FluxPro11, FluxKontext, ContentModerationError
 
 
 class OpenaiBase:
@@ -138,16 +138,38 @@ class OpenaiBase:
                             status_code=200
                         )
         elif url_path.endswith("images/edits"):
-            logger.info(f"Detected /images/edits request - would route to {cls.IMAGE_EDIT_PLATFORM.value} platform")
-            # Continue with normal OpenAI routing for now
-            aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+            match cls.IMAGE_EDIT_PLATFORM:
+                case ImageEditPlatform.openai:
+                    aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
-            return StreamingResponse(
-                aiter_bytes,
-                status_code=status_code,
-                media_type=media_type,
-                background=background
-            )
+                    return StreamingResponse(
+                        aiter_bytes,
+                        status_code=status_code,
+                        media_type=media_type,
+                        background=background
+                    )
+
+                case ImageEditPlatform.flux1_kontext:
+                    try:
+                        json_response, content_length = await cls.to_flux_kontext(client, request, url_path)
+
+                        return StreamingResponse(
+                            json_response,
+                            status_code=200,
+                            headers={"Content-Length": str(content_length)},
+                            media_type="application/json"
+                        )
+                    except ContentModerationError as e:
+                        return JSONResponse(
+                            content={
+                                "error": {
+                                    "code": "content_policy_violation",
+                                    "message": e.message,
+                                    "type": "content_policy_violation"
+                                }
+                            },
+                            status_code=200
+                        )
         else:
             aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
@@ -164,6 +186,13 @@ class OpenaiBase:
 
         flux = FluxPro11()
         return await flux.generate_image(request)
+
+    @classmethod
+    async def to_flux_kontext(cls, client, request, url_path):
+        logger.info("Forwarding image edit request to Flux Kontext")
+
+        flux_kontext = FluxKontext()
+        return await flux_kontext.generate_image(request)
 
     @classmethod
     async def to_openai(cls, client, request, url_path):
