@@ -14,8 +14,8 @@ from .tool import env2list
 import hmac
 import hashlib
 
-from .routers.image_gen_platform import ImageGenPlatform
-from .flux.bfl_api import FluxPro11, ContentModerationError
+from .routers.image_gen_platform import ImageGenPlatform, ImageEditPlatform
+from .flux.bfl_api import FluxPro11, FluxKontext, ContentModerationError
 
 
 class OpenaiBase:
@@ -30,6 +30,7 @@ class OpenaiBase:
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
     _IMAGE_GEN_PLATFORM = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
+    _IMAGE_EDIT_PLATFORM = os.environ.get("IMAGE_EDIT_PLATFORM", "openai").strip()
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -39,9 +40,10 @@ class OpenaiBase:
     timeout = 600
 
     IMAGE_GEN_PLATFORM = ImageGenPlatform[_IMAGE_GEN_PLATFORM]
+    IMAGE_EDIT_PLATFORM = ImageEditPlatform[_IMAGE_EDIT_PLATFORM]
 
     print_startup_info(
-        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORM
+        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORM, IMAGE_EDIT_PLATFORM
     )
     if _LOG_CHAT:
         setting_log(save_file=False)
@@ -104,7 +106,7 @@ class OpenaiBase:
 
         if url_path.endswith("images/generations"):
             match cls.IMAGE_GEN_PLATFORM:
-                case ImageGenPlatform.dalle3:
+                case ImageGenPlatform.dalle3 | ImageGenPlatform.openai:
                     aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
                     return StreamingResponse(
@@ -117,6 +119,39 @@ class OpenaiBase:
                 case ImageGenPlatform.flux1_1:
                     try:
                         json_response, content_length = await cls.to_flux(client, request, url_path)
+
+                        return StreamingResponse(
+                            json_response,
+                            status_code=200,
+                            headers={"Content-Length": str(content_length)},
+                            media_type="application/json"
+                        )
+                    except ContentModerationError as e:
+                        return JSONResponse(
+                            content={
+                                "error": {
+                                    "code": "content_policy_violation",
+                                    "message": e.message,
+                                    "type": "content_policy_violation"
+                                }
+                            },
+                            status_code=200
+                        )
+        elif url_path.endswith("images/edits"):
+            match cls.IMAGE_EDIT_PLATFORM:
+                case ImageEditPlatform.openai:
+                    aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+
+                    return StreamingResponse(
+                        aiter_bytes,
+                        status_code=status_code,
+                        media_type=media_type,
+                        background=background
+                    )
+
+                case ImageEditPlatform.flux1_kontext:
+                    try:
+                        json_response, content_length = await cls.to_flux_kontext(client, request, url_path)
 
                         return StreamingResponse(
                             json_response,
@@ -151,6 +186,13 @@ class OpenaiBase:
 
         flux = FluxPro11()
         return await flux.generate_image(request)
+
+    @classmethod
+    async def to_flux_kontext(cls, client, request, url_path):
+        logger.info("Forwarding image edit request to Flux Kontext")
+
+        flux_kontext = FluxKontext()
+        return await flux_kontext.generate_image(request)
 
     @classmethod
     async def to_openai(cls, client, request, url_path):

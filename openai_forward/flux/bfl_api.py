@@ -229,6 +229,124 @@ class FluxPro11(FluxBase):
     POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "image/*"
 
+class FluxKontext(FluxBase):
+    API_ENDPOINT = "v1/flux-kontext-pro"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "application/json"
+
+    @classmethod
+    async def generate_image(cls, request: Request):
+        headers = {
+            "Accept": cls.ACCEPT,
+            "x-key": BFL_API_KEY,
+            "Content-Type": "application/json"
+        }
+
+        if headers["x-key"] is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Invalid configuration.",
+            )
+
+        image_id = await cls._image_request(request, headers)
+        image_url, prompt = await cls._poll_for_result(image_id, headers)
+
+        # Escape special characters in prompt
+        prompt = json.dumps(prompt)
+
+        return (
+            cls._stream_image(image_url, prompt),
+            await cls._image_size(image_url, prompt)
+        )
+
+    @classmethod
+    async def _image_request(cls, request: Request, headers):
+        # Parse multipart form data from OpenAI request
+        form_data = await request.form()
+        
+        # Extract image file from form data
+        image_file = form_data.get('image')
+        if not image_file:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required 'image' parameter"
+            )
+        
+        # Read image data and convert to base64
+        image_bytes = await image_file.read()
+        input_image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+        
+        # Extract prompt from form data
+        prompt = form_data.get('prompt', '')
+        if isinstance(prompt, bytes):
+            prompt = prompt.decode('utf-8')
+
+        body = {
+            "prompt": prompt,
+            "input_image": input_image_b64,
+            "aspect_ratio": "1:1",  # Default aspect ratio
+            "output_format": "png"  # Default output format
+        }
+
+        # Handle optional parameters from form data
+        if 'seed' in form_data:
+            try:
+                body['seed'] = int(form_data['seed'])
+            except (ValueError, TypeError):
+                pass  # Ignore invalid seed values
+                
+        if 'safety_tolerance' in form_data:
+            try:
+                body['safety_tolerance'] = int(form_data['safety_tolerance'])
+            except (ValueError, TypeError):
+                pass  # Ignore invalid safety_tolerance values
+
+        async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
+            url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
+
+            req = client.build_request(
+                "POST",
+                url,
+                headers=headers,
+                content=json.dumps(body),
+                timeout=cls.TIMEOUT,
+            )
+
+            try:
+                r = await client.send(req, stream=False)
+            except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+                error_info = (
+                    f"{type(e)}: {e} | "
+                    f"Please check if host={request.client.host} can access [{BASE_URL}] successfully?"
+                )
+                logger.error(error_info)
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_info
+                )
+            except Exception as e:
+                logger.exception(f"{type(e)}:")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e
+                )
+
+            if r.status_code != 200:
+                logger.exception(f"{r.status_code}:{r.json()}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY, 
+                    detail=f"Error from Flux Kontext call: {r.status_code}"
+                )
+
+            response_data = r.json()
+            image_id = response_data.get('id')
+            if image_id is None:
+                logger.exception("No Image ID returned from FLUX Kontext")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY, 
+                    detail=f"No id returned from Flux Kontext"
+                )
+
+            return image_id
+
 class ContentModerationError(Exception):
     def __init__(self, message):
         super().__init__(message)

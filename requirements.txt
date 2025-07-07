@@ -7,3 +7,5 @@ python-dotenv
 httpx
 pytz
 numpy
+python-multipart
+
