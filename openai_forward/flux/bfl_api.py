@@ -229,6 +229,13 @@ class FluxPro11(FluxBase):
     POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "image/*"
 
+
+class FluxKontextGen(FluxBase):
+    API_ENDPOINT = "v1/flux-kontext-pro"
+    POLL_ENDPOINT = "v1/get_result"
+    ACCEPT = "application/json"
+
+
 class FluxKontext(FluxBase):
     API_ENDPOINT = "v1/flux-kontext-pro"
     POLL_ENDPOINT = "v1/get_result"
@@ -284,8 +291,8 @@ class FluxKontext(FluxBase):
         body = {
             "prompt": prompt,
             "input_image": input_image_b64,
-            "aspect_ratio": "1:1",  # Default aspect ratio
-            "output_format": "png"  # Default output format
+            "aspect_ratio": None,
+            "output_format": "png"
         }
 
         # Handle optional parameters from form data

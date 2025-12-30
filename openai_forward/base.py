@@ -15,7 +15,7 @@ import hmac
 import hashlib
 
 from .routers.image_gen_platform import ImageGenPlatform, ImageEditPlatform
-from .flux.bfl_api import FluxPro11, FluxKontext, ContentModerationError
+from .flux.bfl_api import FluxPro11, FluxKontextGen, FluxKontext, ContentModerationError
 
 
 class OpenaiBase:
@@ -137,6 +137,28 @@ class OpenaiBase:
                             },
                             status_code=200
                         )
+
+                case ImageGenPlatform.flux1_kontext:
+                    try:
+                        json_response, content_length = await cls.to_flux_kontext_gen(client, request, url_path)
+
+                        return StreamingResponse(
+                            json_response,
+                            status_code=200,
+                            headers={"Content-Length": str(content_length)},
+                            media_type="application/json"
+                        )
+                    except ContentModerationError as e:
+                        return JSONResponse(
+                            content={
+                                "error": {
+                                    "code": "content_policy_violation",
+                                    "message": e.message,
+                                    "type": "content_policy_violation"
+                                }
+                            },
+                            status_code=200
+                        )
         elif url_path.endswith("images/edits"):
             match cls.IMAGE_EDIT_PLATFORM:
                 case ImageEditPlatform.openai:
@@ -186,6 +208,13 @@ class OpenaiBase:
 
         flux = FluxPro11()
         return await flux.generate_image(request)
+
+    @classmethod
+    async def to_flux_kontext_gen(cls, client, request, url_path):
+        logger.info("Forwarding image generation request to Flux Kontext")
+
+        flux_kontext_gen = FluxKontextGen()
+        return await flux_kontext_gen.generate_image(request)
 
     @classmethod
     async def to_flux_kontext(cls, client, request, url_path):
