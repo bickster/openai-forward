@@ -4,6 +4,7 @@ class ImageGenPlatform(Enum):
     dalle3 = "OpenAI (default)"
     openai = "OpenAI (default)"
     flux1_1 = "Flux 1.1"
+    flux1_kontext = "FLUX.1 Kontext"
 
 class ImageEditPlatform(Enum):
     openai = "OpenAI (default)"
