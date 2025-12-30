@@ -48,6 +48,30 @@ def _clamp_dimensions(width: int, height: int) -> tuple[int, int]:
     return width, height
 
 
+def _aspect_ratio_to_dimensions(aspect_ratio: str) -> tuple[int, int]:
+    """Convert aspect ratio string (e.g., '16:9') to dimensions with larger side = 1440."""
+    MAX_DIM = 1440
+
+    try:
+        w_ratio, h_ratio = map(int, aspect_ratio.split(':'))
+    except (ValueError, TypeError):
+        return 1024, 1024  # Default to square
+
+    # Set larger dimension to MAX_DIM, calculate smaller proportionally
+    if w_ratio >= h_ratio:
+        width = MAX_DIM
+        height = int(MAX_DIM * h_ratio / w_ratio)
+    else:
+        height = MAX_DIM
+        width = int(MAX_DIM * w_ratio / h_ratio)
+
+    # Round to nearest multiple of 32
+    width = round(width / 32) * 32
+    height = round(height / 32) * 32
+
+    return width, height
+
+
 class FluxBase:
     API_ENDPOINT = ""
     POLL_ENDPOINT = ""
@@ -84,19 +108,24 @@ class FluxBase:
     async def _image_request(cls, request: Request, headers):
         data = await request.json()
 
-        # Parse size from OpenAI format (e.g., "1024x1024") or use defaults
-        width = 1024
-        height = 1024
-        size = data.get('size')
-        if size and 'x' in size:
+        # Parse size - supports both aspect ratio ("16:9") and dimensions ("1024x1024")
+        size = data.get('size', '1:1')
+        if ':' in size:
+            # Aspect ratio format (e.g., "16:9")
+            width, height = _aspect_ratio_to_dimensions(size)
+            original_size = size
+        elif 'x' in size:
+            # Dimensional format (e.g., "1024x1024")
             try:
                 width, height = map(int, size.split('x'))
             except (ValueError, TypeError):
-                pass  # Use defaults if parsing fails
-
-        # Clamp dimensions to FLUX 1.1 Pro constraints while preserving aspect ratio
-        original_size = f"{width}x{height}"
-        width, height = _clamp_dimensions(width, height)
+                width, height = 1024, 1024
+            original_size = f"{width}x{height}"
+            width, height = _clamp_dimensions(width, height)
+        else:
+            # Default to square
+            width, height = 1024, 1024
+            original_size = "1:1"
 
         body = {
             "prompt": data.get('prompt'),
@@ -282,20 +311,24 @@ class FluxKontextGen(FluxBase):
     async def _image_request(cls, request: Request, headers):
         data = await request.json()
 
-        # Parse size and convert to aspect ratio
-        width, height = 1024, 1024
-        size = data.get('size')
-        if size and 'x' in size:
+        # Parse size - supports both aspect ratio ("16:9") and dimensions ("1024x1024")
+        size = data.get('size', '1:1')
+        if ':' in size:
+            # Aspect ratio format - pass through directly
+            aspect_ratio = size
+        elif 'x' in size:
+            # Dimensional format - convert to aspect ratio
             try:
                 width, height = map(int, size.split('x'))
             except (ValueError, TypeError):
-                pass
+                width, height = 1024, 1024
+            divisor = gcd(width, height)
+            aspect_ratio = f"{width // divisor}:{height // divisor}"
+        else:
+            # Default to square
+            aspect_ratio = "1:1"
 
-        # Calculate aspect ratio string (e.g., "16:9")
-        divisor = gcd(width, height)
-        aspect_ratio = f"{width // divisor}:{height // divisor}"
-
-        logger.info(f"FLUX Kontext image generation: endpoint={cls.API_ENDPOINT}, size={width}x{height}, aspect_ratio={aspect_ratio}")
+        logger.info(f"FLUX Kontext image generation: endpoint={cls.API_ENDPOINT}, requested={size}, aspect_ratio={aspect_ratio}")
 
         body = {
             "prompt": data.get('prompt'),
