@@ -6,6 +6,7 @@ import json
 import base64
 import os
 import time
+from math import gcd
 
 BASE_URL = "https://api.bfl.ml/"
 BFL_API_KEY = os.environ.get("BFL_API_KEY", None)
@@ -21,6 +22,55 @@ JSON_SUFFIX = f'''
     ]
 }}
 '''
+
+
+def _clamp_dimensions(width: int, height: int) -> tuple[int, int]:
+    """Clamp dimensions to FLUX 1.1 Pro constraints while preserving aspect ratio."""
+    MIN_DIM = 256
+    MAX_DIM = 1440
+
+    # Scale down if either dimension exceeds max
+    if width > MAX_DIM or height > MAX_DIM:
+        scale = min(MAX_DIM / width, MAX_DIM / height)
+        width = int(width * scale)
+        height = int(height * scale)
+
+    # Scale up if either dimension is below min
+    if width < MIN_DIM or height < MIN_DIM:
+        scale = max(MIN_DIM / width, MIN_DIM / height)
+        width = int(width * scale)
+        height = int(height * scale)
+
+    # Round to nearest multiple of 32
+    width = max(MIN_DIM, min(MAX_DIM, round(width / 32) * 32))
+    height = max(MIN_DIM, min(MAX_DIM, round(height / 32) * 32))
+
+    return width, height
+
+
+def _aspect_ratio_to_dimensions(aspect_ratio: str) -> tuple[int, int]:
+    """Convert aspect ratio string (e.g., '16:9') to dimensions with larger side = 1440."""
+    MAX_DIM = 1440
+
+    try:
+        w_ratio, h_ratio = map(int, aspect_ratio.split(':'))
+    except (ValueError, TypeError):
+        return 1024, 1024  # Default to square
+
+    # Set larger dimension to MAX_DIM, calculate smaller proportionally
+    if w_ratio >= h_ratio:
+        width = MAX_DIM
+        height = int(MAX_DIM * h_ratio / w_ratio)
+    else:
+        height = MAX_DIM
+        width = int(MAX_DIM * w_ratio / h_ratio)
+
+    # Round to nearest multiple of 32
+    width = round(width / 32) * 32
+    height = round(height / 32) * 32
+
+    return width, height
+
 
 class FluxBase:
     API_ENDPOINT = ""
@@ -57,12 +107,34 @@ class FluxBase:
     @classmethod
     async def _image_request(cls, request: Request, headers):
         data = await request.json()
+
+        # Parse size - supports both aspect ratio ("16:9") and dimensions ("1024x1024")
+        size = data.get('size', '1:1')
+        if ':' in size:
+            # Aspect ratio format (e.g., "16:9")
+            width, height = _aspect_ratio_to_dimensions(size)
+            original_size = size
+        elif 'x' in size:
+            # Dimensional format (e.g., "1024x1024")
+            try:
+                width, height = map(int, size.split('x'))
+            except (ValueError, TypeError):
+                width, height = 1024, 1024
+            original_size = f"{width}x{height}"
+            width, height = _clamp_dimensions(width, height)
+        else:
+            # Default to square
+            width, height = 1024, 1024
+            original_size = "1:1"
+
         body = {
             "prompt": data.get('prompt'),
-            "width": 1024,
-            "height": 1024,
+            "width": width,
+            "height": height,
             "prompt_upsampling": True
         }
+
+        logger.info(f"FLUX image generation: endpoint={cls.API_ENDPOINT}, requested={original_size}, actual={width}x{height}")
 
         async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
             url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
@@ -234,6 +306,78 @@ class FluxKontextGen(FluxBase):
     API_ENDPOINT = "v1/flux-kontext-pro"
     POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "application/json"
+
+    @classmethod
+    async def _image_request(cls, request: Request, headers):
+        data = await request.json()
+
+        # Parse size - supports both aspect ratio ("16:9") and dimensions ("1024x1024")
+        size = data.get('size', '1:1')
+        if ':' in size:
+            # Aspect ratio format - pass through directly
+            aspect_ratio = size
+        elif 'x' in size:
+            # Dimensional format - convert to aspect ratio
+            try:
+                width, height = map(int, size.split('x'))
+            except (ValueError, TypeError):
+                width, height = 1024, 1024
+            divisor = gcd(width, height)
+            aspect_ratio = f"{width // divisor}:{height // divisor}"
+        else:
+            # Default to square
+            aspect_ratio = "1:1"
+
+        logger.info(f"FLUX Kontext image generation: endpoint={cls.API_ENDPOINT}, requested={size}, aspect_ratio={aspect_ratio}")
+
+        body = {
+            "prompt": data.get('prompt'),
+            "aspect_ratio": aspect_ratio,
+            "prompt_upsampling": True
+        }
+
+        async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
+            url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
+
+            req = client.build_request(
+                request.method,
+                url,
+                headers=headers,
+                content=json.dumps(body),
+                timeout=cls.TIMEOUT,
+            )
+
+            try:
+                r = await client.send(req, stream=False)
+            except (httpx.ConnectError, httpx.ConnectTimeout) as e:
+                error_info = (
+                    f"{type(e)}: {e} | "
+                    f"Please check if host={request.client.host} can access [{BASE_URL}] successfully?"
+                )
+                logger.error(error_info)
+                raise HTTPException(
+                    status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=error_info
+                )
+            except Exception as e:
+                logger.exception(f"{type(e)}:")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e
+                )
+
+            if r.status_code != 200:
+                logger.exception(f"{r.status_code}:{r.json()}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Error from Flux Kontext call: {r.status_code}"
+                )
+
+            imageId = r.json().get('id')
+            if imageId is None:
+                logger.exception("No Image ID returned from FLUX Kontext")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No id returned"
+                )
+
+            return imageId
 
 
 class FluxKontext(FluxBase):
