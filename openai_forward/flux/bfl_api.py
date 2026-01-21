@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 from fastapi import HTTPException, Request, status
 
@@ -182,6 +183,8 @@ class FluxBase:
     @classmethod
     async def _poll_for_result(cls, id, headers):
         timeout, start_time = 240, time.time()
+        task_not_found_count = 0
+        max_task_not_found_retries = 5
 
         # Create the AsyncClient once for the entire polling duration
         async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
@@ -208,15 +211,26 @@ class FluxBase:
                             )
                         elif json_response.get('status') == "Content Moderated":
                             raise ContentModerationError("Moderated")
+                        elif json_response.get('status') == "Task not found":
+                            task_not_found_count += 1
+                            if task_not_found_count > max_task_not_found_retries:
+                                logger.error(f"FLUX task not found after {max_task_not_found_retries} retries, giving up")
+                                raise HTTPException(
+                                    status_code=status.HTTP_502_BAD_GATEWAY,
+                                    detail=f"Task not found after {max_task_not_found_retries} retries"
+                                )
+                            logger.info(f"FLUX poll status: Task not found ({task_not_found_count}/{max_task_not_found_retries}), sleeping 5s before retry")
+                            await asyncio.sleep(5)
                         elif json_response.get('status') == "Pending":
-                            time.sleep(5)  # Use async sleep to avoid blocking
+                            logger.info(f"FLUX poll status: Pending, sleeping 5s before retry")
+                            await asyncio.sleep(5)
                         else:
                             raise HTTPException(
                                 status_code=status.HTTP_418_IM_A_TEAPOT,
                                 detail=f"API Error: {json_response}"
                             )
                     elif r.status_code == status.HTTP_202_ACCEPTED:
-                        time.sleep(5)  # Use async sleep
+                        await asyncio.sleep(5)
                     elif time.time() - start_time > timeout:
                         logger.exception("Polling timed out")
                         raise HTTPException(
@@ -224,6 +238,22 @@ class FluxBase:
                             detail="Polling timed out"
                         )
                     else:
+                        # Check if it's a "Task not found" response (may come as 404)
+                        try:
+                            json_response = r.json()
+                            if json_response.get('status') == "Task not found":
+                                task_not_found_count += 1
+                                if task_not_found_count > max_task_not_found_retries:
+                                    logger.error(f"FLUX task not found after {max_task_not_found_retries} retries, giving up")
+                                    raise HTTPException(
+                                        status_code=status.HTTP_502_BAD_GATEWAY,
+                                        detail=f"Task not found after {max_task_not_found_retries} retries"
+                                    )
+                                logger.info(f"FLUX poll status: Task not found (HTTP {r.status_code}) ({task_not_found_count}/{max_task_not_found_retries}), sleeping 5s before retry")
+                                await asyncio.sleep(5)
+                                continue
+                        except Exception:
+                            pass
                         logger.exception(f"API Error:{r.json()}")
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
