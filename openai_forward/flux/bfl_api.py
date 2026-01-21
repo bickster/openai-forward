@@ -8,7 +8,7 @@ import os
 import time
 from math import gcd
 
-BASE_URL = "https://api.bfl.ml/"
+BASE_URL = "https://api.bfl.ai/"
 BFL_API_KEY = os.environ.get("BFL_API_KEY", None)
 
 JSON_PREFIX = f'''{{
