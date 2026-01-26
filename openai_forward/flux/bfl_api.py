@@ -75,7 +75,6 @@ def _aspect_ratio_to_dimensions(aspect_ratio: str) -> tuple[int, int]:
 
 class FluxBase:
     API_ENDPOINT = ""
-    POLL_ENDPOINT = ""
     ACCEPT = ""
 
     TIMEOUT = 600
@@ -93,9 +92,9 @@ class FluxBase:
                 detail=f"Invalid configuration.",
             )
 
-        image_id = await cls._image_request(request, headers)
+        polling_url = await cls._image_request(request, headers)
 
-        image_url, prompt = await cls._poll_for_result(image_id, headers)
+        image_url, prompt = await cls._poll_for_result(polling_url, headers)
 
         # Escape special characters in prompt
         prompt = json.dumps(prompt)
@@ -171,29 +170,31 @@ class FluxBase:
                     status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Error from Flux call: {r.status_code}"
                 )
 
-            imageId = r.json().get('id')
-            if imageId is None:
-                logger.exception("No Image ID returned from FLUX")
+            response_data = r.json()
+            polling_url = response_data.get('polling_url')
+
+            if polling_url is None:
+                logger.exception("No polling_url returned from FLUX")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No id returned"
+                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No polling_url returned"
                 )
 
-            return imageId
+            return polling_url
 
     @classmethod
-    async def _poll_for_result(cls, id, headers):
+    async def _poll_for_result(cls, polling_url, headers):
         timeout, start_time = 240, time.time()
         task_not_found_count = 0
         max_task_not_found_retries = 5
 
-        # Create the AsyncClient once for the entire polling duration
-        async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
-            while True:
-                url = httpx.URL(path=cls.POLL_ENDPOINT, query=f"id={id}".encode("utf-8"))
+        logger.info(f"FLUX polling: {polling_url}")
 
+        # Create the AsyncClient once for the entire polling duration
+        async with httpx.AsyncClient(http1=True, http2=False) as client:
+            while True:
                 req = client.build_request(
                     "GET",
-                    url,
+                    polling_url,
                     headers=headers,
                     timeout=cls.TIMEOUT,
                 )
@@ -328,13 +329,11 @@ class FluxBase:
 
 class FluxPro11(FluxBase):
     API_ENDPOINT = "v1/flux-pro-1.1"
-    POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "image/*"
 
 
 class FluxKontextGen(FluxBase):
     API_ENDPOINT = "v1/flux-kontext-pro"
-    POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "application/json"
 
     @classmethod
@@ -400,19 +399,20 @@ class FluxKontextGen(FluxBase):
                     status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Error from Flux Kontext call: {r.status_code}"
                 )
 
-            imageId = r.json().get('id')
-            if imageId is None:
-                logger.exception("No Image ID returned from FLUX Kontext")
+            response_data = r.json()
+            polling_url = response_data.get('polling_url')
+
+            if polling_url is None:
+                logger.exception("No polling_url returned from FLUX Kontext")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No id returned"
+                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No polling_url returned"
                 )
 
-            return imageId
+            return polling_url
 
 
 class FluxKontext(FluxBase):
     API_ENDPOINT = "v1/flux-kontext-pro"
-    POLL_ENDPOINT = "v1/get_result"
     ACCEPT = "application/json"
 
     @classmethod
@@ -429,8 +429,8 @@ class FluxKontext(FluxBase):
                 detail=f"Invalid configuration.",
             )
 
-        image_id = await cls._image_request(request, headers)
-        image_url, prompt = await cls._poll_for_result(image_id, headers)
+        polling_url = await cls._image_request(request, headers)
+        image_url, prompt = await cls._poll_for_result(polling_url, headers)
 
         # Escape special characters in prompt
         prompt = json.dumps(prompt)
@@ -518,15 +518,17 @@ class FluxKontext(FluxBase):
                 )
 
             response_data = r.json()
-            image_id = response_data.get('id')
-            if image_id is None:
-                logger.exception("No Image ID returned from FLUX Kontext")
+            polling_url = response_data.get('polling_url')
+
+            if polling_url is None:
+                logger.exception("No polling_url returned from FLUX Kontext")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, 
-                    detail=f"No id returned from Flux Kontext"
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"No polling_url returned from Flux Kontext"
                 )
 
-            return image_id
+            return polling_url
+
 
 class ContentModerationError(Exception):
     def __init__(self, message):
