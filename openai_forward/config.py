@@ -9,7 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 
-def print_startup_info(base_url, route_prefix, api_key, no_auth_mode, log_chat, image_gen_platform, image_edit_platform):
+def print_startup_info(base_url, route_prefix, api_key, no_auth_mode, log_chat, image_gen_platforms, image_edit_platforms):
     try:
         from dotenv import load_dotenv
 
@@ -36,11 +36,11 @@ def print_startup_info(base_url, route_prefix, api_key, no_auth_mode, log_chat, 
     print(Panel(table, title="🤗 openai-forward is ready to serve! ", expand=False))
 
     table2 = Table(title="", box=None, width=100)
-    table2.add_column("Image-Gen-Platform", justify="center", style="green")
-    table2.add_column("Image-Edit-Platform", justify="center", style="green")
+    table2.add_column("Image-Gen-Platforms", justify="center", style="green")
+    table2.add_column("Image-Edit-Platforms", justify="center", style="green")
     table2.add_row(
-        str(image_gen_platform),
-        str(image_edit_platform)
+        ", ".join(p.name for p in image_gen_platforms),
+        ", ".join(p.name for p in image_edit_platforms)
     )
     print(Panel(table2, title="Supplemental Configuration", expand=False))
 
