@@ -16,6 +16,25 @@ import hashlib
 
 from .routers.image_gen_platform import ImageGenPlatform, ImageEditPlatform
 from .flux.bfl_api import FluxPro11, FluxKontextGen, FluxKontext, ContentModerationError
+import json
+
+
+def _aspect_ratio_to_openai_dimensions(aspect_ratio: str) -> tuple[int, int]:
+    """Convert aspect ratio string to the nearest valid OpenAI dimensions.
+
+    OpenAI only accepts: 1024x1024, 1536x1024 (landscape), 1024x1536 (portrait).
+    """
+    try:
+        w_ratio, h_ratio = map(int, aspect_ratio.split(':'))
+    except (ValueError, TypeError):
+        return 1024, 1024
+
+    if w_ratio > h_ratio:
+        return 1536, 1024
+    elif h_ratio > w_ratio:
+        return 1024, 1536
+    else:
+        return 1024, 1024
 
 
 class OpenaiBase:
@@ -29,8 +48,8 @@ class OpenaiBase:
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
-    _IMAGE_GEN_PLATFORM = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
-    _IMAGE_EDIT_PLATFORM = os.environ.get("IMAGE_EDIT_PLATFORM", "openai").strip()
+    _IMAGE_GEN_PLATFORMS_STR = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
+    _IMAGE_EDIT_PLATFORMS_STR = os.environ.get("IMAGE_EDIT_PLATFORM", "openai").strip()
 
     if ROUTE_PREFIX:
         if ROUTE_PREFIX.endswith("/"):
@@ -39,11 +58,11 @@ class OpenaiBase:
             ROUTE_PREFIX = "/" + ROUTE_PREFIX
     timeout = 600
 
-    IMAGE_GEN_PLATFORM = ImageGenPlatform[_IMAGE_GEN_PLATFORM]
-    IMAGE_EDIT_PLATFORM = ImageEditPlatform[_IMAGE_EDIT_PLATFORM]
+    IMAGE_GEN_PLATFORMS = [ImageGenPlatform[p.strip()] for p in _IMAGE_GEN_PLATFORMS_STR.split(",")]
+    IMAGE_EDIT_PLATFORMS = [ImageEditPlatform[p.strip()] for p in _IMAGE_EDIT_PLATFORMS_STR.split(",")]
 
     print_startup_info(
-        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORM, IMAGE_EDIT_PLATFORM
+        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORMS, IMAGE_EDIT_PLATFORMS
     )
     if _LOG_CHAT:
         setting_log(save_file=False)
@@ -92,6 +111,19 @@ class OpenaiBase:
         expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
 
+    @staticmethod
+    def _resolve_platform(platforms, header_value):
+        """Pick platform from list based on X-ImageModel header.
+
+        If header matches a family ("openai"/"flux"), return the first
+        platform in that family. Otherwise return the first platform (default).
+        """
+        if header_value in ("openai", "flux"):
+            for p in platforms:
+                if p.family == header_value:
+                    return p
+        return platforms[0]
+
     @classmethod
     async def _reverse_proxy(cls, request: Request):
         if not await cls.validate_request(request):
@@ -104,8 +136,13 @@ class OpenaiBase:
         url_path = request.url.path
         url_path = url_path[len(cls.ROUTE_PREFIX):]
 
+        image_model = request.headers.get("x-imagemodel", "").strip().lower()
+
         if url_path.endswith("images/generations"):
-            match cls.IMAGE_GEN_PLATFORM:
+            platform = cls._resolve_platform(cls.IMAGE_GEN_PLATFORMS, image_model)
+            logger.info(f"Image generation -> {platform.name}")
+
+            match platform:
                 case ImageGenPlatform.dalle3 | ImageGenPlatform.openai:
                     aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
@@ -160,7 +197,10 @@ class OpenaiBase:
                             status_code=200
                         )
         elif url_path.endswith("images/edits"):
-            match cls.IMAGE_EDIT_PLATFORM:
+            platform = cls._resolve_platform(cls.IMAGE_EDIT_PLATFORMS, image_model)
+            logger.info(f"Image edit -> {platform.name}")
+
+            match platform:
                 case ImageEditPlatform.openai:
                     aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
 
@@ -204,21 +244,21 @@ class OpenaiBase:
 
     @classmethod
     async def to_flux(cls, client, request, url_path):
-        logger.info("Forwarding image request to Flux")
+        logger.info("to_flux: generate")
 
         flux = FluxPro11()
         return await flux.generate_image(request)
 
     @classmethod
     async def to_flux_kontext_gen(cls, client, request, url_path):
-        logger.info("Forwarding image generation request to Flux Kontext")
+        logger.info("to_flux_kontext: generate")
 
         flux_kontext_gen = FluxKontextGen()
         return await flux_kontext_gen.generate_image(request)
 
     @classmethod
     async def to_flux_kontext(cls, client, request, url_path):
-        logger.info("Forwarding image edit request to Flux Kontext")
+        logger.info("to_flux_kontext: edit")
 
         flux_kontext = FluxKontext()
         return await flux_kontext.generate_image(request)
@@ -249,11 +289,80 @@ class OpenaiBase:
                 logger.debug(
                     f"log chat error:\n{request.client.host=} {request.method=}: {e}"
                 )
+        # Convert aspect ratio to dimensions for OpenAI image generation
+        content = request.stream()
+        if url_path.endswith("images/generations"):
+            try:
+                body = await request.body()
+                data = json.loads(body)
+                size = data.get('size', '1024x1024')
+                if ':' in size:
+                    w, h = _aspect_ratio_to_openai_dimensions(size)
+                    data['size'] = f"{w}x{h}"
+                    logger.info(f"Converted size '{size}' -> '{data['size']}'")
+                elif 'x' not in size:
+                    data['size'] = '1024x1024'
+                content = json.dumps(data).encode()
+            except Exception as e:
+                logger.debug(f"Failed to parse image generation body for size conversion: {e}")
+
+        elif url_path.endswith("images/edits"):
+            try:
+                form = await request.form()
+                size = form.get('size', '1024x1024')
+                needs_rebuild = False
+
+                if isinstance(size, str) and ':' in size:
+                    w, h = _aspect_ratio_to_openai_dimensions(size)
+                    new_size = f"{w}x{h}"
+                    logger.info(f"Converted edit size '{size}' -> '{new_size}'")
+                    needs_rebuild = True
+                else:
+                    new_size = size
+
+                if needs_rebuild:
+                    import uuid
+                    boundary = f"----OpenAIForwardBoundary{uuid.uuid4().hex}"
+                    parts = []
+
+                    for key in form:
+                        value = form[key]
+                        if hasattr(value, 'read'):  # UploadFile
+                            file_bytes = await value.read()
+                            parts.append(
+                                f'--{boundary}\r\n'
+                                f'Content-Disposition: form-data; name="{key}"; filename="{value.filename}"\r\n'
+                                f'Content-Type: {value.content_type}\r\n\r\n'
+                            )
+                            parts.append(file_bytes)
+                            parts.append(b'\r\n')
+                        else:
+                            field_value = new_size if key == 'size' else str(value)
+                            parts.append(
+                                f'--{boundary}\r\n'
+                                f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
+                                f'{field_value}\r\n'
+                            )
+
+                    parts.append(f'--{boundary}--\r\n')
+
+                    body_bytes = b''
+                    for part in parts:
+                        body_bytes += part.encode('utf-8') if isinstance(part, str) else part
+
+                    content = body_bytes
+                    auth_headers_dict["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+
+            except Exception as e:
+                logger.debug(f"Failed to parse image edit body for size conversion: {e}")
+
+        logger.info(f"to_openai: {request.method} {url}")
+
         req = client.build_request(
             request.method,
             url,
             headers=auth_headers_dict,
-            content=request.stream(),
+            content=content,
             timeout=cls.timeout,
         )
         try:
@@ -272,6 +381,12 @@ class OpenaiBase:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e
             )
+        logger.info(f"to_openai response: status={r.status_code} content-type={r.headers.get('content-type')}")
+        if r.status_code >= 400:
+            response_body = await r.aread()
+            logger.error(f"to_openai error response body: {response_body.decode(errors='replace')}")
+            return iter([response_body]), r.status_code, r.headers.get("content-type"), BackgroundTask(r.aclose)
+
         # Get bytes from response
         aiter_bytes = (
             cls.aiter_bytes(r, url_path, uid)
