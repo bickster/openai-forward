@@ -61,6 +61,11 @@ class OpenaiBase:
     IMAGE_GEN_PLATFORMS = [ImageGenPlatform[p.strip()] for p in _IMAGE_GEN_PLATFORMS_STR.split(",")]
     IMAGE_EDIT_PLATFORMS = [ImageEditPlatform[p.strip()] for p in _IMAGE_EDIT_PLATFORMS_STR.split(",")]
 
+    logger.debug(f"IMAGE_GEN_PLATFORM env: {_IMAGE_GEN_PLATFORMS_STR!r}")
+    logger.debug(f"IMAGE_GEN_PLATFORMS resolved: {[p.name for p in IMAGE_GEN_PLATFORMS]}")
+    logger.debug(f"IMAGE_EDIT_PLATFORM env: {_IMAGE_EDIT_PLATFORMS_STR!r}")
+    logger.debug(f"IMAGE_EDIT_PLATFORMS resolved: {[p.name for p in IMAGE_EDIT_PLATFORMS]}")
+
     print_startup_info(
         BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORMS, IMAGE_EDIT_PLATFORMS
     )
@@ -118,10 +123,14 @@ class OpenaiBase:
         If header matches a family ("openai"/"flux"), return the first
         platform in that family. Otherwise return the first platform (default).
         """
+        logger.debug(f"_resolve_platform: platforms={[p.name for p in platforms]}, header_value={header_value!r}")
         if header_value in ("openai", "flux"):
             for p in platforms:
+                logger.debug(f"_resolve_platform: checking {p.name} (family={p.family})")
                 if p.family == header_value:
+                    logger.debug(f"_resolve_platform: matched {p.name} by family")
                     return p
+        logger.debug(f"_resolve_platform: falling through to default platforms[0]={platforms[0].name}")
         return platforms[0]
 
     @classmethod
@@ -137,6 +146,8 @@ class OpenaiBase:
         url_path = url_path[len(cls.ROUTE_PREFIX):]
 
         image_model = request.headers.get("x-imagemodel", "").strip().lower()
+        logger.debug(f"_reverse_proxy: url_path={url_path}, x-imagemodel={image_model!r}")
+        logger.debug(f"_reverse_proxy: all request headers={dict(request.headers)}")
 
         if url_path.endswith("images/generations"):
             platform = cls._resolve_platform(cls.IMAGE_GEN_PLATFORMS, image_model)
