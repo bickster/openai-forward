@@ -16,6 +16,9 @@ class TestOpenai:
     def teardown_method():
         OpenaiBase.IP_BLACKLIST = []
         OpenaiBase.IP_WHITELIST = []
+        OpenaiBase.UA_BLACKLIST = []
+        OpenaiBase.UA_WHITELIST = []
+        OpenaiBase._compile_ua_patterns()
         OpenaiBase._default_api_key_list = []
 
     def test_env(self, openai: OpenaiBase):
@@ -44,3 +47,50 @@ class TestOpenai:
         assert openai.validate_request_host(ip2) is None
         with pytest.raises(HTTPException):
             openai.validate_request_host(ip1)
+
+    def test_validate_user_agent(self, openai: OpenaiBase):
+        my_app_ua = "okhttp/3.9.3"
+        bad_ua = "okhttp/5.0.0-alpha.2"
+        browser_ua = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36"
+
+        # no lists configured -> nothing matches, everything passes
+        assert openai.validate_request_user_agent(browser_ua) is None
+
+        # blacklist alone
+        OpenaiBase.UA_BLACKLIST = ["okhttp/*"]
+        OpenaiBase._compile_ua_patterns()
+        with pytest.raises(HTTPException) as exc_info:
+            openai.validate_request_user_agent(bad_ua)
+        # response must not hint at the reason for the block
+        assert exc_info.value.detail == "Forbidden"
+        assert openai.validate_request_user_agent(browser_ua) is None
+
+        # whitelist overrides blacklist
+        OpenaiBase.UA_WHITELIST = ["okhttp/3.9.*"]
+        OpenaiBase._compile_ua_patterns()
+        assert openai.validate_request_user_agent(my_app_ua) is None
+        with pytest.raises(HTTPException):
+            openai.validate_request_user_agent(bad_ua)
+        assert openai.validate_request_user_agent(browser_ua) is None
+
+        # strict mode: blacklist * blocks everything not whitelisted
+        OpenaiBase.UA_BLACKLIST = ["*"]
+        OpenaiBase._compile_ua_patterns()
+        assert openai.validate_request_user_agent(my_app_ua) is None
+        with pytest.raises(HTTPException):
+            openai.validate_request_user_agent(browser_ua)
+
+        # missing/empty UA is blocked whenever filtering is enabled
+        OpenaiBase.UA_BLACKLIST = ["okhttp/*"]
+        OpenaiBase._compile_ua_patterns()
+        with pytest.raises(HTTPException):
+            openai.validate_request_user_agent("")
+
+        # matching is case-insensitive
+        with pytest.raises(HTTPException):
+            openai.validate_request_user_agent("OkHttp/5.0")
+
+        # patterns match the full UA string, not a prefix
+        OpenaiBase.UA_BLACKLIST = ["okhttp"]
+        OpenaiBase._compile_ua_patterns()
+        assert openai.validate_request_user_agent(my_app_ua) is None
