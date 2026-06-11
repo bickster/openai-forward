@@ -91,7 +91,8 @@ Key environment variables (can be set in `.env` file):
 - `FORWARD_KEY`: Space-separated custom keys for API access
 - `ROUTE_PREFIX`: Custom route prefix
 - `LOG_CHAT`: Enable chat logging (true/false)
-- `IP_WHITELIST`/`IP_BLACKLIST`: IP access control
+- `IP_WHITELIST`/`IP_BLACKLIST`: IP access control (space-separated)
+- `UA_WHITELIST`/`UA_BLACKLIST`: User-Agent access control (comma-separated glob patterns, e.g. `UA_WHITELIST="okhttp/3.9.*"` with `UA_BLACKLIST="okhttp/*"`). Whitelist match allows, then blacklist match blocks, otherwise allowed; add `*` to the blacklist for strict whitelist-only mode. Patterns must match the full UA string (case-insensitive). When either list is set, requests with a missing/empty User-Agent are blocked. Blocked requests get a generic 403 identical to the HMAC-failure response (no hint that UA filtering exists).
 
 ## Testing Notes
 

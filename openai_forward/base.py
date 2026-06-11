@@ -13,6 +13,8 @@ from .tool import env2list
 
 import hmac
 import hashlib
+import fnmatch
+import re
 
 from .routers.image_gen_platform import ImageGenPlatform, ImageEditPlatform
 from .flux.bfl_api import FluxPro11, FluxKontextGen, FluxKontext, ContentModerationError
@@ -47,6 +49,9 @@ class OpenaiBase:
     _no_auth_mode = _openai_api_key_list != [] and _FWD_KEYS == set()
     IP_WHITELIST = env2list("IP_WHITELIST", sep=" ")
     IP_BLACKLIST = env2list("IP_BLACKLIST", sep=" ")
+    # Comma-separated glob patterns (e.g. "okhttp/3.9.*"); comma because UA strings contain spaces
+    UA_WHITELIST = env2list("UA_WHITELIST", sep=",")
+    UA_BLACKLIST = env2list("UA_BLACKLIST", sep=",")
     APP_SECRET = os.environ.get("APP_SECRET", "").strip()
     _IMAGE_GEN_PLATFORMS_STR = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
     _IMAGE_EDIT_PLATFORMS_STR = os.environ.get("IMAGE_EDIT_PLATFORM", "openai").strip()
@@ -72,6 +77,31 @@ class OpenaiBase:
     if _LOG_CHAT:
         setting_log(save_file=False)
         chatsaver = ChatSaver()
+
+    @classmethod
+    def _compile_ua_patterns(cls):
+        cls._ua_whitelist_patterns = [
+            re.compile(fnmatch.translate(p), re.IGNORECASE) for p in cls.UA_WHITELIST
+        ]
+        cls._ua_blacklist_patterns = [
+            re.compile(fnmatch.translate(p), re.IGNORECASE) for p in cls.UA_BLACKLIST
+        ]
+
+    def validate_request_user_agent(self, user_agent: str):
+        # detail must stay identical to the HMAC-failure response so blocked
+        # clients can't tell which gate rejected them
+        forbidden = HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden",
+        )
+        if not user_agent:
+            logger.info("UA filter: blocked request with missing User-Agent")
+            raise forbidden
+        if any(p.match(user_agent) for p in self._ua_whitelist_patterns):
+            return
+        if any(p.match(user_agent) for p in self._ua_blacklist_patterns):
+            logger.info(f"UA filter: blocked user-agent={user_agent!r}")
+            raise forbidden
 
     def validate_request_host(self, request: Request):
         ip = request.client.host
@@ -405,3 +435,6 @@ class OpenaiBase:
             else r.aiter_bytes()
         )
         return aiter_bytes, r.status_code, r.headers.get("content-type"), BackgroundTask(r.aclose)
+
+
+OpenaiBase._compile_ua_patterns()
