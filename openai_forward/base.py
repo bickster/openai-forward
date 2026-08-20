@@ -42,7 +42,9 @@ import json
 #
 # Both rewrite an existing `model` field; neither adds one to a request that omits it.
 OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "").strip()
-OPENAI_IMAGE_MODEL_FALLBACK = os.environ.get("OPENAI_IMAGE_MODEL_FALLBACK", "gpt-image-1.5").strip()
+OPENAI_IMAGE_MODEL_FALLBACK = os.environ.get(
+    "OPENAI_IMAGE_MODEL_FALLBACK", "gpt-image-1.5"
+).strip()
 
 
 def _normalize_image_model(model) -> str | None:
@@ -63,7 +65,9 @@ def _normalize_image_model(model) -> str | None:
 # conservative treatment. Add ids here (comma separated, prefix match) as they ship.
 FLEXIBLE_SIZE_MODELS = tuple(
     m.strip().lower()
-    for m in os.environ.get("OPENAI_IMAGE_FLEXIBLE_SIZE_MODELS", "gpt-image-2").split(",")
+    for m in os.environ.get("OPENAI_IMAGE_FLEXIBLE_SIZE_MODELS", "gpt-image-2").split(
+        ","
+    )
     if m.strip()
 )
 
@@ -77,7 +81,9 @@ _MAX_PIXELS = 8_294_400
 
 
 def _model_takes_any_size(model) -> bool:
-    return isinstance(model, str) and model.strip().lower().startswith(FLEXIBLE_SIZE_MODELS)
+    return isinstance(model, str) and model.strip().lower().startswith(
+        FLEXIBLE_SIZE_MODELS
+    )
 
 
 def _legacy_dimensions(w_ratio: int, h_ratio: int) -> tuple[int, int]:
@@ -107,7 +113,11 @@ def _exact_dimensions(w_ratio: int, h_ratio: int) -> tuple[int, int] | None:
     k = 1
     while max(unit_w * k, unit_h * k) <= _MAX_EDGE:
         w, h = unit_w * k, unit_h * k
-        if w % _SIZE_STEP == 0 and h % _SIZE_STEP == 0 and _MIN_PIXELS <= w * h <= _MAX_PIXELS:
+        if (
+            w % _SIZE_STEP == 0
+            and h % _SIZE_STEP == 0
+            and _MIN_PIXELS <= w * h <= _MAX_PIXELS
+        ):
             candidates.append((w, h))
         k += 1
     if not candidates:
@@ -121,7 +131,9 @@ def _exact_dimensions(w_ratio: int, h_ratio: int) -> tuple[int, int] | None:
     return min(candidates, key=lambda c: c[0] * c[1])
 
 
-def _aspect_ratio_to_openai_dimensions(aspect_ratio: str, model=None) -> tuple[int, int]:
+def _aspect_ratio_to_openai_dimensions(
+    aspect_ratio: str, model=None
+) -> tuple[int, int]:
     """Convert an aspect ratio string such as "16:9" to dimensions OpenAI will accept.
 
     gpt-image-2 takes any size meeting its constraints, so the ratio is honoured exactly.
@@ -168,13 +180,21 @@ class OpenaiBase:
             ROUTE_PREFIX = "/" + ROUTE_PREFIX
     timeout = 600
 
-    IMAGE_GEN_PLATFORMS = [ImageGenPlatform[p.strip()] for p in _IMAGE_GEN_PLATFORMS_STR.split(",")]
-    IMAGE_EDIT_PLATFORMS = [ImageEditPlatform[p.strip()] for p in _IMAGE_EDIT_PLATFORMS_STR.split(",")]
+    IMAGE_GEN_PLATFORMS = [
+        ImageGenPlatform[p.strip()] for p in _IMAGE_GEN_PLATFORMS_STR.split(",")
+    ]
+    IMAGE_EDIT_PLATFORMS = [
+        ImageEditPlatform[p.strip()] for p in _IMAGE_EDIT_PLATFORMS_STR.split(",")
+    ]
 
     logger.debug(f"IMAGE_GEN_PLATFORM env: {_IMAGE_GEN_PLATFORMS_STR!r}")
-    logger.debug(f"IMAGE_GEN_PLATFORMS resolved: {[p.name for p in IMAGE_GEN_PLATFORMS]}")
+    logger.debug(
+        f"IMAGE_GEN_PLATFORMS resolved: {[p.name for p in IMAGE_GEN_PLATFORMS]}"
+    )
     logger.debug(f"IMAGE_EDIT_PLATFORM env: {_IMAGE_EDIT_PLATFORMS_STR!r}")
-    logger.debug(f"IMAGE_EDIT_PLATFORMS resolved: {[p.name for p in IMAGE_EDIT_PLATFORMS]}")
+    logger.debug(
+        f"IMAGE_EDIT_PLATFORMS resolved: {[p.name for p in IMAGE_EDIT_PLATFORMS]}"
+    )
     # info, not debug: the startup banner's column can be clipped at default terminal width,
     # so this is the line that reliably shows the pin in journalctl.
     logger.info(
@@ -182,8 +202,14 @@ class OpenaiBase:
     )
 
     print_startup_info(
-        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORMS, IMAGE_EDIT_PLATFORMS,
-        OPENAI_IMAGE_MODEL
+        BASE_URL,
+        ROUTE_PREFIX,
+        _openai_api_key_list,
+        _no_auth_mode,
+        _LOG_CHAT,
+        IMAGE_GEN_PLATFORMS,
+        IMAGE_EDIT_PLATFORMS,
+        OPENAI_IMAGE_MODEL,
     )
     if _LOG_CHAT:
         setting_log(save_file=False)
@@ -254,7 +280,9 @@ class OpenaiBase:
         if not signature:
             return False
         request_data = await request.body()
-        expected_signature = hmac.new(cls.APP_SECRET.encode(), request_data, hashlib.sha256).hexdigest()
+        expected_signature = hmac.new(
+            cls.APP_SECRET.encode(), request_data, hashlib.sha256
+        ).hexdigest()
         return hmac.compare_digest(signature, expected_signature)
 
     @staticmethod
@@ -264,14 +292,20 @@ class OpenaiBase:
         If header matches a family ("openai"/"flux"), return the first
         platform in that family. Otherwise return the first platform (default).
         """
-        logger.debug(f"_resolve_platform: platforms={[p.name for p in platforms]}, header_value={header_value!r}")
+        logger.debug(
+            f"_resolve_platform: platforms={[p.name for p in platforms]}, header_value={header_value!r}"
+        )
         if header_value in ("openai", "flux"):
             for p in platforms:
-                logger.debug(f"_resolve_platform: checking {p.name} (family={p.family})")
+                logger.debug(
+                    f"_resolve_platform: checking {p.name} (family={p.family})"
+                )
                 if p.family == header_value:
                     logger.debug(f"_resolve_platform: matched {p.name} by family")
                     return p
-        logger.debug(f"_resolve_platform: falling through to default platforms[0]={platforms[0].name}")
+        logger.debug(
+            f"_resolve_platform: falling through to default platforms[0]={platforms[0].name}"
+        )
         return platforms[0]
 
     @classmethod
@@ -284,10 +318,12 @@ class OpenaiBase:
 
         client = httpx.AsyncClient(base_url=cls.BASE_URL, http1=True, http2=False)
         url_path = request.url.path
-        url_path = url_path[len(cls.ROUTE_PREFIX):]
+        url_path = url_path[len(cls.ROUTE_PREFIX) :]
 
         image_model = request.headers.get("x-imagemodel", "").strip().lower()
-        logger.debug(f"_reverse_proxy: url_path={url_path}, x-imagemodel={image_model!r}")
+        logger.debug(
+            f"_reverse_proxy: url_path={url_path}, x-imagemodel={image_model!r}"
+        )
         logger.debug(f"_reverse_proxy: all request headers={dict(request.headers)}")
 
         if url_path.endswith("images/generations"):
@@ -296,24 +332,31 @@ class OpenaiBase:
 
             match platform:
                 case ImageGenPlatform.dalle3 | ImageGenPlatform.openai:
-                    aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+                    (
+                        aiter_bytes,
+                        status_code,
+                        media_type,
+                        background,
+                    ) = await cls.to_openai(client, request, url_path)
 
                     return StreamingResponse(
                         aiter_bytes,
                         status_code=status_code,
                         media_type=media_type,
-                        background=background
+                        background=background,
                     )
 
                 case ImageGenPlatform.flux1_1:
                     try:
-                        json_response, content_length = await cls.to_flux(client, request, url_path)
+                        json_response, content_length = await cls.to_flux(
+                            client, request, url_path
+                        )
 
                         return StreamingResponse(
                             json_response,
                             status_code=200,
                             headers={"Content-Length": str(content_length)},
-                            media_type="application/json"
+                            media_type="application/json",
                         )
                     except ContentModerationError as e:
                         return JSONResponse(
@@ -321,21 +364,23 @@ class OpenaiBase:
                                 "error": {
                                     "code": "content_policy_violation",
                                     "message": e.message,
-                                    "type": "content_policy_violation"
+                                    "type": "content_policy_violation",
                                 }
                             },
-                            status_code=200
+                            status_code=200,
                         )
 
                 case ImageGenPlatform.flux1_kontext:
                     try:
-                        json_response, content_length = await cls.to_flux_kontext_gen(client, request, url_path)
+                        json_response, content_length = await cls.to_flux_kontext_gen(
+                            client, request, url_path
+                        )
 
                         return StreamingResponse(
                             json_response,
                             status_code=200,
                             headers={"Content-Length": str(content_length)},
-                            media_type="application/json"
+                            media_type="application/json",
                         )
                     except ContentModerationError as e:
                         return JSONResponse(
@@ -343,10 +388,10 @@ class OpenaiBase:
                                 "error": {
                                     "code": "content_policy_violation",
                                     "message": e.message,
-                                    "type": "content_policy_violation"
+                                    "type": "content_policy_violation",
                                 }
                             },
-                            status_code=200
+                            status_code=200,
                         )
         elif url_path.endswith("images/edits"):
             platform = cls._resolve_platform(cls.IMAGE_EDIT_PLATFORMS, image_model)
@@ -354,24 +399,31 @@ class OpenaiBase:
 
             match platform:
                 case ImageEditPlatform.openai:
-                    aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+                    (
+                        aiter_bytes,
+                        status_code,
+                        media_type,
+                        background,
+                    ) = await cls.to_openai(client, request, url_path)
 
                     return StreamingResponse(
                         aiter_bytes,
                         status_code=status_code,
                         media_type=media_type,
-                        background=background
+                        background=background,
                     )
 
                 case ImageEditPlatform.flux1_kontext:
                     try:
-                        json_response, content_length = await cls.to_flux_kontext(client, request, url_path)
+                        json_response, content_length = await cls.to_flux_kontext(
+                            client, request, url_path
+                        )
 
                         return StreamingResponse(
                             json_response,
                             status_code=200,
                             headers={"Content-Length": str(content_length)},
-                            media_type="application/json"
+                            media_type="application/json",
                         )
                     except ContentModerationError as e:
                         return JSONResponse(
@@ -379,19 +431,21 @@ class OpenaiBase:
                                 "error": {
                                     "code": "content_policy_violation",
                                     "message": e.message,
-                                    "type": "content_policy_violation"
+                                    "type": "content_policy_violation",
                                 }
                             },
-                            status_code=200
+                            status_code=200,
                         )
         else:
-            aiter_bytes, status_code, media_type, background = await cls.to_openai(client, request, url_path)
+            aiter_bytes, status_code, media_type, background = await cls.to_openai(
+                client, request, url_path
+            )
 
             return StreamingResponse(
                 aiter_bytes,
                 status_code=status_code,
                 media_type=media_type,
-                background=background
+                background=background,
             )
 
     @classmethod
@@ -421,9 +475,12 @@ class OpenaiBase:
         url = httpx.URL(path=url_path, query=request.url.query.encode("utf-8"))
         headers = dict(request.headers)
         auth = headers.pop("authorization", "")
-        auth_headers_dict = {"Content-Type": headers.get("content-type", "application/json"), "Authorization": auth}
+        auth_headers_dict = {
+            "Content-Type": headers.get("content-type", "application/json"),
+            "Authorization": auth,
+        }
         auth_prefix = "Bearer "
-        if cls._no_auth_mode or auth and auth[len(auth_prefix):] in cls._FWD_KEYS:
+        if cls._no_auth_mode or auth and auth[len(auth_prefix) :] in cls._FWD_KEYS:
             auth = auth_prefix + next(cls._cycle_api_key)
             auth_headers_dict["Authorization"] = auth
         log_chat_completions = False
@@ -458,14 +515,20 @@ class OpenaiBase:
                 if ':' in size:
                     w, h = _aspect_ratio_to_openai_dimensions(size, model)
                     data['size'] = f"{w}x{h}"
-                    logger.info(f"Converted size '{size}' -> '{data['size']}' for model {model!r}")
-                elif 'x' not in size and not (size == 'auto' and _model_takes_any_size(model)):
+                    logger.info(
+                        f"Converted size '{size}' -> '{data['size']}' for model {model!r}"
+                    )
+                elif 'x' not in size and not (
+                    size == 'auto' and _model_takes_any_size(model)
+                ):
                     # 'auto' is a real value for models that accept any size -- let it through
                     # rather than pinning them to a square.
                     data['size'] = '1024x1024'
                 content = json.dumps(data).encode()
             except Exception as e:
-                logger.debug(f"Failed to parse image generation body for size conversion: {e}")
+                logger.debug(
+                    f"Failed to parse image generation body for size conversion: {e}"
+                )
 
         elif url_path.endswith("images/edits"):
             try:
@@ -480,20 +543,25 @@ class OpenaiBase:
 
                 new_model = _normalize_image_model(form.get('model'))
                 if new_model is not None:
-                    logger.info(f"Rewrote edit model '{form.get('model')}' -> '{new_model}'")
+                    logger.info(
+                        f"Rewrote edit model '{form.get('model')}' -> '{new_model}'"
+                    )
                     needs_rebuild = True
                 model = new_model if new_model is not None else form.get('model')
 
                 if isinstance(size, str) and ':' in size:
                     w, h = _aspect_ratio_to_openai_dimensions(size, model)
                     new_size = f"{w}x{h}"
-                    logger.info(f"Converted edit size '{size}' -> '{new_size}' for model {model!r}")
+                    logger.info(
+                        f"Converted edit size '{size}' -> '{new_size}' for model {model!r}"
+                    )
                     needs_rebuild = True
                 else:
                     new_size = size
 
                 if needs_rebuild:
                     import uuid
+
                     boundary = f"----OpenAIForwardBoundary{uuid.uuid4().hex}"
                     parts = []
 
@@ -527,13 +595,19 @@ class OpenaiBase:
 
                     body_bytes = b''
                     for part in parts:
-                        body_bytes += part.encode('utf-8') if isinstance(part, str) else part
+                        body_bytes += (
+                            part.encode('utf-8') if isinstance(part, str) else part
+                        )
 
                     content = body_bytes
-                    auth_headers_dict["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+                    auth_headers_dict[
+                        "Content-Type"
+                    ] = f"multipart/form-data; boundary={boundary}"
 
             except Exception as e:
-                logger.debug(f"Failed to parse image edit body for size conversion: {e}")
+                logger.debug(
+                    f"Failed to parse image edit body for size conversion: {e}"
+                )
 
         logger.info(f"to_openai: {request.method} {url}")
 
@@ -560,11 +634,20 @@ class OpenaiBase:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=e
             )
-        logger.info(f"to_openai response: status={r.status_code} content-type={r.headers.get('content-type')}")
+        logger.info(
+            f"to_openai response: status={r.status_code} content-type={r.headers.get('content-type')}"
+        )
         if r.status_code >= 400:
             response_body = await r.aread()
-            logger.error(f"to_openai error response body: {response_body.decode(errors='replace')}")
-            return iter([response_body]), r.status_code, r.headers.get("content-type"), BackgroundTask(r.aclose)
+            logger.error(
+                f"to_openai error response body: {response_body.decode(errors='replace')}"
+            )
+            return (
+                iter([response_body]),
+                r.status_code,
+                r.headers.get("content-type"),
+                BackgroundTask(r.aclose),
+            )
 
         # Get bytes from response
         aiter_bytes = (
@@ -572,7 +655,12 @@ class OpenaiBase:
             if log_chat_completions
             else r.aiter_bytes()
         )
-        return aiter_bytes, r.status_code, r.headers.get("content-type"), BackgroundTask(r.aclose)
+        return (
+            aiter_bytes,
+            r.status_code,
+            r.headers.get("content-type"),
+            BackgroundTask(r.aclose),
+        )
 
 
 OpenaiBase._compile_ua_patterns()

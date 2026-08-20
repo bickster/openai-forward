@@ -9,8 +9,16 @@ from rich.panel import Panel
 from rich.table import Table
 
 
-def print_startup_info(base_url, route_prefix, api_key, no_auth_mode, log_chat, image_gen_platforms, image_edit_platforms,
-                       image_model_pin=""):
+def print_startup_info(
+    base_url,
+    route_prefix,
+    api_key,
+    no_auth_mode,
+    log_chat,
+    image_gen_platforms,
+    image_edit_platforms,
+    image_model_pin="",
+):
     try:
         from dotenv import load_dotenv
 
@@ -28,22 +36,22 @@ def print_startup_info(base_url, route_prefix, api_key, no_auth_mode, log_chat, 
     )
     table.add_column("Log-chat", justify="center", style="green")
     table.add_row(
-        base_url,
-        route_prefix,
-        str(api_key_info),
-        str(no_auth_mode),
-        str(log_chat)
+        base_url, route_prefix, str(api_key_info), str(no_auth_mode), str(log_chat)
     )
     print(Panel(table, title="🤗 openai-forward is ready to serve! ", expand=False))
 
     table2 = Table(title="", box=None, width=100)
     table2.add_column("Image-Gen-Platforms", justify="center", style="green")
     table2.add_column("Image-Edit-Platforms", justify="center", style="green")
-    table2.add_column("Image-Model-Pin", justify="center", style="yellow" if image_model_pin else "green")
+    table2.add_column(
+        "Image-Model-Pin",
+        justify="center",
+        style="yellow" if image_model_pin else "green",
+    )
     table2.add_row(
         ", ".join(p.name for p in image_gen_platforms),
         ", ".join(p.name for p in image_edit_platforms),
-        image_model_pin or "client's choice"
+        image_model_pin or "client's choice",
     )
     print(Panel(table2, title="Supplemental Configuration", expand=False))
 
