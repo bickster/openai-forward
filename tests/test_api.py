@@ -44,7 +44,8 @@ class TestOpenai:
         assert openai.BASE_URL == "https://api.openai.com"
 
     def test_api_keys(self, openai: OpenaiBase):
-        assert openai._openai_api_key_list == []
+        # No assertion on the starting list: it comes from OPENAI_API_KEY in the
+        # environment, so it is empty only when the suite happens to run without one.
         OpenaiBase._openai_api_key_list = ["a", "b"]
         OpenaiBase._cycle_api_key = cycle(OpenaiBase._openai_api_key_list)
         assert next(openai._cycle_api_key) == "a"
