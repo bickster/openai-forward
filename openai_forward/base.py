@@ -392,6 +392,11 @@ class OpenaiBase:
 
         elif url_path.endswith("images/edits"):
             try:
+                # Cache the body before parsing the form: request.form() consumes the
+                # request stream without caching it, which would leave `content` (the
+                # request.stream() generator created above) raising "Stream consumed"
+                # when httpx forwards an unmodified body.
+                await request.body()
                 form = await request.form()
                 size = form.get('size', '1024x1024')
                 needs_rebuild = False
@@ -414,8 +419,10 @@ class OpenaiBase:
                     boundary = f"----OpenAIForwardBoundary{uuid.uuid4().hex}"
                     parts = []
 
-                    for key in form:
-                        value = form[key]
+                    # multi_items() yields every part; `for key in form` would
+                    # yield each key once and form[key] returns only the last
+                    # value, dropping repeated parts such as image[] lists.
+                    for key, value in form.multi_items():
                         if hasattr(value, 'read'):  # UploadFile
                             file_bytes = await value.read()
                             parts.append(
