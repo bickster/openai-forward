@@ -349,6 +349,11 @@ class OpenaiBase:
 
         elif url_path.endswith("images/edits"):
             try:
+                # Cache the body before parsing the form: request.form() consumes the
+                # request stream without caching it, which would leave `content` (the
+                # request.stream() generator created above) raising "Stream consumed"
+                # when httpx forwards an unmodified body.
+                await request.body()
                 form = await request.form()
                 size = form.get('size', '1024x1024')
                 needs_rebuild = False
