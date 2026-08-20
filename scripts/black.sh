@@ -11,7 +11,9 @@ for changed_file in $CHANGED_FILES; do
   fi
 done
 if (( ${#arrVar[@]} )); then
-  black -S --check "${arrVar[@]}"
+  # Propagate black's exit status. Without this the trailing `exit 0` swallowed it and the
+  # check-black job passed no matter what black found.
+  black -S --check "${arrVar[@]}" || exit 1
 fi
 echo "no files left to check"
 exit 0

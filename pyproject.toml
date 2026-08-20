@@ -20,13 +20,22 @@ classifiers = [
 
 dependencies = [
     "loguru",
-    "sparrow-python>=0.1.3",
+    # Upper bound deliberately: sparrow-python grew heavy undeclared imports at package
+    # import time -- 0.5.x needs pandas, 0.6.x needs cv2, neither of which it declares. With
+    # an open range a fresh `pip install .` resolves to 0.6.2 and cannot import at all.
+    "sparrow-python>=0.1.3,<0.5",
     "fastapi",
     "uvicorn",
     "orjson",
     "python-dotenv",
     "httpx",
     "pytz",
+    # sparrow-python imports numpy at package import without declaring it, so `pip install .`
+    # produced an install that could not import openai_forward at all.
+    "numpy",
+    # starlette needs this for request.form(); without it the image-edit path raises inside
+    # the broad except in to_openai and silently forwards the body unrewritten.
+    "python-multipart",
 ]
 
 dynamic = ["version"]
