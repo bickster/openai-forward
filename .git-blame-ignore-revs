@@ -1,0 +1,7 @@
+# Revisions to skip in `git blame` -- mechanical reformats, no behaviour changes.
+# Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub picks this file up automatically.
+
+# Reformat with black -S so scripts/black.sh could be made to actually fail
+6b22852f8c679c51d99c187d39493ca9bd02848c

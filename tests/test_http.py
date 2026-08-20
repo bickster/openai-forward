@@ -38,5 +38,8 @@ class TestRun:
         assert resp.is_success
 
     def test_get_chat_completions(self):
+        # 403, not 401: every proxied request must carry an X-Request-Signature HMAC, and
+        # validate_request rejects the ones that do not before any auth handling happens.
+        # The 401 this used to assert predates that gate.
         resp = httpx.get("http://localhost:8000/v1/chat/completions")
-        assert resp.status_code == 401
+        assert resp.status_code == 403

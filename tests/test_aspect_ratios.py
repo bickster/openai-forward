@@ -20,7 +20,11 @@ APP_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16", "9:21"]
 FLEXIBLE = "gpt-image-2"
 LEGACY = "gpt-image-1.5"
 
-LEGACY_BUDGET = {"landscape": 1536 * 1024, "portrait": 1024 * 1536, "square": 1024 * 1024}
+LEGACY_BUDGET = {
+    "landscape": 1536 * 1024,
+    "portrait": 1024 * 1536,
+    "square": 1024 * 1024,
+}
 
 
 def orientation(ratio):
@@ -92,10 +96,15 @@ def test_aspect_limit_boundary_is_inclusive():
     """The docs say the ratio must be between 1:3 and 3:1, so exactly 3:1 is allowed."""
     w, h = convert("3:1", FLEXIBLE)
     assert max(w, h) / min(w, h) == 3
-    assert convert("4:1", FLEXIBLE) == (1536, 1024)  # beyond the limit -> legacy fallback
+    assert convert("4:1", FLEXIBLE) == (
+        1536,
+        1024,
+    )  # beyond the limit -> legacy fallback
 
 
-@pytest.mark.parametrize("bad", ["", "auto", "1024x1024", "not:a:ratio", "0:5", "x:y", None])
+@pytest.mark.parametrize(
+    "bad", ["", "auto", "1024x1024", "not:a:ratio", "0:5", "x:y", None]
+)
 def test_unparseable_ratios_fall_back_to_a_square(bad):
     assert convert(bad, FLEXIBLE) == (1024, 1024)
 
@@ -167,7 +176,10 @@ def forward_generation(payload, pin=""):
                 client, request, "/v1/images/generations"
             )
         finally:
-            OpenaiBase.APP_SECRET, base.OPENAI_IMAGE_MODEL = original_secret, original_pin
+            OpenaiBase.APP_SECRET, base.OPENAI_IMAGE_MODEL = (
+                original_secret,
+                original_pin,
+            )
         async for _ in aiter_bytes:
             pass
         if background is not None:
@@ -190,7 +202,9 @@ def test_pin_is_applied_before_the_size_is_chosen():
 
 
 def test_without_the_pin_the_client_model_still_gets_legacy_sizes():
-    forwarded = forward_generation({"model": LEGACY, "prompt": "a cat", "n": 1, "size": "3:4"})
+    forwarded = forward_generation(
+        {"model": LEGACY, "prompt": "a cat", "n": 1, "size": "3:4"}
+    )
     assert forwarded["model"] == LEGACY
     assert forwarded["size"] == "1024x1536"
 
@@ -214,5 +228,7 @@ def test_auto_survives_for_a_model_that_understands_it():
 
 
 def test_auto_is_still_replaced_for_legacy_models():
-    forwarded = forward_generation({"model": LEGACY, "prompt": "a cat", "n": 1, "size": "auto"})
+    forwarded = forward_generation(
+        {"model": LEGACY, "prompt": "a cat", "n": 1, "size": "auto"}
+    )
     assert forwarded["size"] == "1024x1024"

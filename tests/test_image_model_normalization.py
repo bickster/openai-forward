@@ -33,7 +33,9 @@ def edit_body(model: str, size: str | None = None) -> bytes:
         f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="n"\r\n\r\n1\r\n',
     ]
     if size is not None:
-        parts.append(f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="size"\r\n\r\n{size}\r\n')
+        parts.append(
+            f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="size"\r\n\r\n{size}\r\n'
+        )
     parts.append(
         f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="image"; filename="image.png"\r\n'
         f'Content-Type: image/png\r\n\r\nPNGBYTES\r\n'
@@ -121,7 +123,13 @@ def forward_edit(body: bytes) -> bytes:
 
 def test_generation_flux_model_is_rewritten():
     forwarded = forward_generation(
-        {"model": "flux-kontext", "prompt": "a cat", "n": 1, "size": "16:9", "quality": "low"}
+        {
+            "model": "flux-kontext",
+            "prompt": "a cat",
+            "n": 1,
+            "size": "16:9",
+            "quality": "low",
+        }
     )
     assert forwarded["model"] == "gpt-image-1.5"
     assert forwarded["size"] == "1536x1024"  # existing conversion still applies

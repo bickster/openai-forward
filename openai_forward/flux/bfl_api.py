@@ -101,7 +101,7 @@ class FluxBase:
 
         return (
             cls._stream_image(image_url, prompt),
-            await cls._image_size(image_url, prompt)
+            await cls._image_size(image_url, prompt),
         )
 
     @classmethod
@@ -131,13 +131,19 @@ class FluxBase:
             "prompt": data.get('prompt'),
             "width": width,
             "height": height,
-            "prompt_upsampling": True
+            "prompt_upsampling": True,
         }
 
-        logger.info(f"FLUX image generation: endpoint={cls.API_ENDPOINT}, requested={original_size}, actual={width}x{height}")
+        logger.info(
+            f"FLUX image generation: endpoint={cls.API_ENDPOINT}, requested={original_size}, actual={width}x{height}"
+        )
 
-        async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
-            url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
+        async with httpx.AsyncClient(
+            base_url=BASE_URL, http1=True, http2=False
+        ) as client:
+            url = httpx.URL(
+                path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8")
+            )
 
             req = client.build_request(
                 request.method,
@@ -167,7 +173,8 @@ class FluxBase:
             if r.status_code != 200:
                 logger.exception(f"{r.status_code}:{r.json()}")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Error from Flux call: {r.status_code}"
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Error from Flux call: {r.status_code}",
                 )
 
             response_data = r.json()
@@ -176,7 +183,8 @@ class FluxBase:
             if polling_url is None:
                 logger.exception("No polling_url returned from FLUX")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No polling_url returned"
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"No polling_url returned",
                 )
 
             return polling_url
@@ -208,27 +216,33 @@ class FluxBase:
                         if json_response.get('status') == "Ready":
                             return (
                                 json_response.get('result').get('sample'),
-                                json_response.get('result').get('prompt')
+                                json_response.get('result').get('prompt'),
                             )
                         elif json_response.get('status') == "Content Moderated":
                             raise ContentModerationError("Moderated")
                         elif json_response.get('status') == "Task not found":
                             task_not_found_count += 1
                             if task_not_found_count > max_task_not_found_retries:
-                                logger.error(f"FLUX task not found after {max_task_not_found_retries} retries, giving up")
+                                logger.error(
+                                    f"FLUX task not found after {max_task_not_found_retries} retries, giving up"
+                                )
                                 raise HTTPException(
                                     status_code=status.HTTP_502_BAD_GATEWAY,
-                                    detail=f"Task not found after {max_task_not_found_retries} retries"
+                                    detail=f"Task not found after {max_task_not_found_retries} retries",
                                 )
-                            logger.info(f"FLUX poll status: Task not found ({task_not_found_count}/{max_task_not_found_retries}), sleeping 5s before retry")
+                            logger.info(
+                                f"FLUX poll status: Task not found ({task_not_found_count}/{max_task_not_found_retries}), sleeping 5s before retry"
+                            )
                             await asyncio.sleep(5)
                         elif json_response.get('status') == "Pending":
-                            logger.info(f"FLUX poll status: Pending, sleeping 5s before retry")
+                            logger.info(
+                                f"FLUX poll status: Pending, sleeping 5s before retry"
+                            )
                             await asyncio.sleep(5)
                         else:
                             raise HTTPException(
                                 status_code=status.HTTP_418_IM_A_TEAPOT,
-                                detail=f"API Error: {json_response}"
+                                detail=f"API Error: {json_response}",
                             )
                     elif r.status_code == status.HTTP_202_ACCEPTED:
                         await asyncio.sleep(5)
@@ -236,7 +250,7 @@ class FluxBase:
                         logger.exception("Polling timed out")
                         raise HTTPException(
                             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-                            detail="Polling timed out"
+                            detail="Polling timed out",
                         )
                     else:
                         # Check if it's a "Task not found" response (may come as 404)
@@ -245,12 +259,16 @@ class FluxBase:
                             if json_response.get('status') == "Task not found":
                                 task_not_found_count += 1
                                 if task_not_found_count > max_task_not_found_retries:
-                                    logger.error(f"FLUX task not found after {max_task_not_found_retries} retries, giving up")
+                                    logger.error(
+                                        f"FLUX task not found after {max_task_not_found_retries} retries, giving up"
+                                    )
                                     raise HTTPException(
                                         status_code=status.HTTP_502_BAD_GATEWAY,
-                                        detail=f"Task not found after {max_task_not_found_retries} retries"
+                                        detail=f"Task not found after {max_task_not_found_retries} retries",
                                     )
-                                logger.info(f"FLUX poll status: Task not found (HTTP {r.status_code}) ({task_not_found_count}/{max_task_not_found_retries}), sleeping 5s before retry")
+                                logger.info(
+                                    f"FLUX poll status: Task not found (HTTP {r.status_code}) ({task_not_found_count}/{max_task_not_found_retries}), sleeping 5s before retry"
+                                )
                                 await asyncio.sleep(5)
                                 continue
                         except Exception:
@@ -258,7 +276,7 @@ class FluxBase:
                         logger.exception(f"API Error:{r.json()}")
                         raise HTTPException(
                             status_code=status.HTTP_502_BAD_GATEWAY,
-                            detail=f"API Error: {r.json()}"
+                            detail=f"API Error: {r.json()}",
                         )
                 finally:
                     # Close the response explicitly after each use
@@ -307,7 +325,7 @@ class FluxBase:
         if original_content_length is None:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to determine original Content-Length for encoding"
+                detail="Unable to determine original Content-Length for encoding",
             )
 
         original_content_length = int(original_content_length)
@@ -315,17 +333,20 @@ class FluxBase:
         # Calculate the base64 content length, explicitly accounting for padding
         full_base64_groups = original_content_length // 3
         leftover_bytes = original_content_length % 3
-        base64_content_length = 4 * full_base64_groups + (4 if leftover_bytes > 0 else 0)
+        base64_content_length = 4 * full_base64_groups + (
+            4 if leftover_bytes > 0 else 0
+        )
 
         # Calculate total content length by adding JSON parts
         total_content_length = (
-                len(JSON_PREFIX.encode("utf-8"))
-                + base64_content_length
-                + len(JSON_MID.encode("utf-8"))
-                + len(prompt.encode("utf-8"))
-                + len(JSON_SUFFIX.encode("utf-8"))
+            len(JSON_PREFIX.encode("utf-8"))
+            + base64_content_length
+            + len(JSON_MID.encode("utf-8"))
+            + len(prompt.encode("utf-8"))
+            + len(JSON_SUFFIX.encode("utf-8"))
         )
         return total_content_length
+
 
 class FluxPro11(FluxBase):
     API_ENDPOINT = "v1/flux-pro-1.1"
@@ -357,16 +378,22 @@ class FluxKontextGen(FluxBase):
             # Default to square
             aspect_ratio = "1:1"
 
-        logger.info(f"FLUX Kontext image generation: endpoint={cls.API_ENDPOINT}, requested={size}, aspect_ratio={aspect_ratio}")
+        logger.info(
+            f"FLUX Kontext image generation: endpoint={cls.API_ENDPOINT}, requested={size}, aspect_ratio={aspect_ratio}"
+        )
 
         body = {
             "prompt": data.get('prompt'),
             "aspect_ratio": aspect_ratio,
-            "prompt_upsampling": True
+            "prompt_upsampling": True,
         }
 
-        async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
-            url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
+        async with httpx.AsyncClient(
+            base_url=BASE_URL, http1=True, http2=False
+        ) as client:
+            url = httpx.URL(
+                path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8")
+            )
 
             req = client.build_request(
                 request.method,
@@ -396,7 +423,8 @@ class FluxKontextGen(FluxBase):
             if r.status_code != 200:
                 logger.exception(f"{r.status_code}:{r.json()}")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Error from Flux Kontext call: {r.status_code}"
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Error from Flux Kontext call: {r.status_code}",
                 )
 
             response_data = r.json()
@@ -405,7 +433,8 @@ class FluxKontextGen(FluxBase):
             if polling_url is None:
                 logger.exception("No polling_url returned from FLUX Kontext")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, detail=f"No polling_url returned"
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"No polling_url returned",
                 )
 
             return polling_url
@@ -420,7 +449,7 @@ class FluxKontext(FluxBase):
         headers = {
             "Accept": cls.ACCEPT,
             "x-key": BFL_API_KEY,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         if headers["x-key"] is None:
@@ -437,26 +466,26 @@ class FluxKontext(FluxBase):
 
         return (
             cls._stream_image(image_url, prompt),
-            await cls._image_size(image_url, prompt)
+            await cls._image_size(image_url, prompt),
         )
 
     @classmethod
     async def _image_request(cls, request: Request, headers):
         # Parse multipart form data from OpenAI request
         form_data = await request.form()
-        
+
         # Extract image file from form data
         image_file = form_data.get('image')
         if not image_file:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing required 'image' parameter"
+                detail="Missing required 'image' parameter",
             )
-        
+
         # Read image data and convert to base64
         image_bytes = await image_file.read()
         input_image_b64 = base64.b64encode(image_bytes).decode('utf-8')
-        
+
         # Extract prompt from form data
         prompt = form_data.get('prompt', '')
         if isinstance(prompt, bytes):
@@ -466,7 +495,7 @@ class FluxKontext(FluxBase):
             "prompt": prompt,
             "input_image": input_image_b64,
             "aspect_ratio": None,
-            "output_format": "png"
+            "output_format": "png",
         }
 
         # Handle optional parameters from form data
@@ -475,15 +504,19 @@ class FluxKontext(FluxBase):
                 body['seed'] = int(form_data['seed'])
             except (ValueError, TypeError):
                 pass  # Ignore invalid seed values
-                
+
         if 'safety_tolerance' in form_data:
             try:
                 body['safety_tolerance'] = int(form_data['safety_tolerance'])
             except (ValueError, TypeError):
                 pass  # Ignore invalid safety_tolerance values
 
-        async with httpx.AsyncClient(base_url=BASE_URL, http1=True, http2=False) as client:
-            url = httpx.URL(path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8"))
+        async with httpx.AsyncClient(
+            base_url=BASE_URL, http1=True, http2=False
+        ) as client:
+            url = httpx.URL(
+                path=cls.API_ENDPOINT, query=request.url.query.encode("utf-8")
+            )
 
             req = client.build_request(
                 "POST",
@@ -513,8 +546,8 @@ class FluxKontext(FluxBase):
             if r.status_code != 200:
                 logger.exception(f"{r.status_code}:{r.json()}")
                 raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY, 
-                    detail=f"Error from Flux Kontext call: {r.status_code}"
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Error from Flux Kontext call: {r.status_code}",
                 )
 
             response_data = r.json()
@@ -524,7 +557,7 @@ class FluxKontext(FluxBase):
                 logger.exception("No polling_url returned from FLUX Kontext")
                 raise HTTPException(
                     status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=f"No polling_url returned from Flux Kontext"
+                    detail=f"No polling_url returned from Flux Kontext",
                 )
 
             return polling_url
