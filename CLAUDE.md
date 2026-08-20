@@ -101,6 +101,7 @@ Key environment variables (can be set in `.env` file):
 
 - Tests use pytest with timeout and repeat markers
 - Includes doctests from README.md and Python files
+- `tests/test_http.py` are integration tests: they launch the real server and talk to it over localhost. They skip unless the `openai-forward` console script is on `PATH`, so run `pip install -e .` in your venv to exercise them.
 - Test configuration in `pytest.ini` with 180s timeout
 - Uses markers: `slow`, `timeout`, `repeat`
 
