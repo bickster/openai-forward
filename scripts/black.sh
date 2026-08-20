@@ -1,19 +1,22 @@
 #!/bin/bash
-pip install black==22.3.0
-arrVar=()
-echo we ignore non-*.py files
-excluded_files=(
-)
-for changed_file in $CHANGED_FILES; do
-  if [[ ${changed_file} == *.py ]] && ! [[ " ${excluded_files[@]} " =~ " ${changed_file} " ]]; then
-    echo checking ${changed_file}
-    arrVar+=(${changed_file})
-  fi
-done
-if (( ${#arrVar[@]} )); then
-  # Propagate black's exit status. Without this the trailing `exit 0` swallowed it and the
-  # check-black job passed no matter what black found.
-  black -S --check "${arrVar[@]}" || exit 1
+# Formatting gate, used by CI and runnable locally.
+#
+# Checks the whole repository rather than just the files a pull request touched. Working out
+# "just the touched files" needed a third-party action in CI, which is a supply-chain
+# dependency on every pull request for no benefit now that the tree is compliant.
+#
+# Usage:
+#   ./scripts/black.sh          check, exit non-zero if anything is unformatted
+#   ./scripts/black.sh --fix    reformat in place
+set -euo pipefail
+
+if ! command -v black >/dev/null 2>&1; then
+  echo "black is not installed. Install the pinned version with: pip install black==22.3.0" >&2
+  exit 1
 fi
-echo "no files left to check"
-exit 0
+
+if [[ "${1:-}" == "--fix" ]]; then
+  exec black -S .
+fi
+
+exec black -S --check .

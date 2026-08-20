@@ -52,8 +52,9 @@ pytest --doctest-modules --doctest-glob=README.md --doctest-glob=*.py --ignore=s
 # Format code (uses black)
 black -S openai_forward/
 
-# Run formatter script
+# Check formatting the way CI does (whole repo), or fix it in place
 ./scripts/black.sh
+./scripts/black.sh --fix
 ```
 
 ### Docker Development

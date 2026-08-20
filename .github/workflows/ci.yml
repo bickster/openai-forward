@@ -20,29 +20,28 @@ jobs:
   check-black:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
-          fetch-depth: 0
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-      - id: file_changes
-        # pinned to the v1.2 commit: this third-party action runs on every pull request
-        uses: Ana06/get-changed-files@a2f6df8c195e713211f9f6258baafc445149355b
+          python-version: "3.11"
+      # The whole repo is black-clean, so there is no need to work out which files the pull
+      # request touched. That is what Ana06/get-changed-files used to do, at the cost of a
+      # third-party action running on every pull request and seven deprecated `set-output`
+      # warnings per run.
       - name: check black
-        env:
-          CHANGED_FILES: ${{ steps.file_changes.outputs.added_modified }}
-        run: bash ./scripts/black.sh
+        run: |
+          pip install black==22.3.0
+          bash ./scripts/black.sh
 
   lint-flake-8:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.10"
+          python-version: "3.11"
       - name: Lint with flake8
         run: |
           pip install flake8
@@ -58,9 +57,9 @@ jobs:
         # the proxy runs on 3.11.6 in production; test what we ship on
         python-version: ["3.11"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
