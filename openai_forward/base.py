@@ -21,6 +21,39 @@ from .flux.bfl_api import FluxPro11, FluxKontextGen, FluxKontext, ContentModerat
 import json
 
 
+# Image model ids are pinned in the client and only change with an app release, so both of
+# these exist to move that decision to the server.
+#
+# OPENAI_IMAGE_MODEL: when set, every image request routed to OpenAI is sent with this model,
+# whatever the client asked for. This is how a new OpenAI image model is rolled out -- set it,
+# restart, done. Chat models deliberately have no equivalent: the client shapes chat params by
+# model family (max_tokens vs max_completion_tokens, system vs developer role), so swapping the
+# id server-side would send old-family params to a new-family endpoint. Chat stays on the
+# client's own remote config.
+#
+# OPENAI_IMAGE_MODEL_FALLBACK: used only when there is no pin. A client that asked for Flux
+# still puts a Flux model id in the body, and once the request routes to OpenAI (because Flux
+# left the platform list) that id comes back as
+# 400 "The model 'flux-kontext' does not exist." Deliberately a deny-list of Flux ids rather
+# than an allow-list of OpenAI ones: OpenAI keeps adding image models, and an allow-list would
+# reject ids this proxy has never heard of.
+#
+# Both rewrite an existing `model` field; neither adds one to a request that omits it.
+OPENAI_IMAGE_MODEL = os.environ.get("OPENAI_IMAGE_MODEL", "").strip()
+OPENAI_IMAGE_MODEL_FALLBACK = os.environ.get("OPENAI_IMAGE_MODEL_FALLBACK", "gpt-image-1.5").strip()
+
+
+def _normalize_image_model(model) -> str | None:
+    """Return the model to send to OpenAI, or None if the value can stay as it is."""
+    if not isinstance(model, str):
+        return None
+    if OPENAI_IMAGE_MODEL:
+        return None if model == OPENAI_IMAGE_MODEL else OPENAI_IMAGE_MODEL
+    if model.strip().lower().startswith("flux"):
+        return OPENAI_IMAGE_MODEL_FALLBACK
+    return None
+
+
 def _aspect_ratio_to_openai_dimensions(aspect_ratio: str) -> tuple[int, int]:
     """Convert aspect ratio string to the nearest valid OpenAI dimensions.
 
@@ -70,9 +103,15 @@ class OpenaiBase:
     logger.debug(f"IMAGE_GEN_PLATFORMS resolved: {[p.name for p in IMAGE_GEN_PLATFORMS]}")
     logger.debug(f"IMAGE_EDIT_PLATFORM env: {_IMAGE_EDIT_PLATFORMS_STR!r}")
     logger.debug(f"IMAGE_EDIT_PLATFORMS resolved: {[p.name for p in IMAGE_EDIT_PLATFORMS]}")
+    # info, not debug: the startup banner's column can be clipped at default terminal width,
+    # so this is the line that reliably shows the pin in journalctl.
+    logger.info(
+        f"Image model pin: {OPENAI_IMAGE_MODEL or 'none (client chooses; flux ids -> ' + OPENAI_IMAGE_MODEL_FALLBACK + ')'}"
+    )
 
     print_startup_info(
-        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORMS, IMAGE_EDIT_PLATFORMS
+        BASE_URL, ROUTE_PREFIX, _openai_api_key_list, _no_auth_mode, _LOG_CHAT, IMAGE_GEN_PLATFORMS, IMAGE_EDIT_PLATFORMS,
+        OPENAI_IMAGE_MODEL
     )
     if _LOG_CHAT:
         setting_log(save_file=False)
@@ -343,6 +382,10 @@ class OpenaiBase:
                     logger.info(f"Converted size '{size}' -> '{data['size']}'")
                 elif 'x' not in size:
                     data['size'] = '1024x1024'
+                new_model = _normalize_image_model(data.get('model'))
+                if new_model is not None:
+                    logger.info(f"Rewrote model '{data.get('model')}' -> '{new_model}'")
+                    data['model'] = new_model
                 content = json.dumps(data).encode()
             except Exception as e:
                 logger.debug(f"Failed to parse image generation body for size conversion: {e}")
@@ -361,6 +404,11 @@ class OpenaiBase:
                 else:
                     new_size = size
 
+                new_model = _normalize_image_model(form.get('model'))
+                if new_model is not None:
+                    logger.info(f"Rewrote edit model '{form.get('model')}' -> '{new_model}'")
+                    needs_rebuild = True
+
                 if needs_rebuild:
                     import uuid
                     boundary = f"----OpenAIForwardBoundary{uuid.uuid4().hex}"
@@ -378,7 +426,12 @@ class OpenaiBase:
                             parts.append(file_bytes)
                             parts.append(b'\r\n')
                         else:
-                            field_value = new_size if key == 'size' else str(value)
+                            if key == 'size':
+                                field_value = new_size
+                            elif key == 'model' and new_model is not None:
+                                field_value = new_model
+                            else:
+                                field_value = str(value)
                             parts.append(
                                 f'--{boundary}\r\n'
                                 f'Content-Disposition: form-data; name="{key}"\r\n\r\n'
