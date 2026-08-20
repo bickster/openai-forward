@@ -91,6 +91,8 @@ Key environment variables (can be set in `.env` file):
 - `FORWARD_KEY`: Space-separated custom keys for API access
 - `ROUTE_PREFIX`: Custom route prefix
 - `LOG_CHAT`: Enable chat logging (true/false)
+- `OPENAI_IMAGE_MODEL`: pins the model used for `/v1/images/generations` and `/v1/images/edits` when they route to OpenAI, overriding whatever the client asked for. This is how a new OpenAI image model is rolled out without an app release — set it, restart, confirm the `Image model pin:` line in the log. Unset means the client's own value is used. There is deliberately no chat equivalent: clients shape chat params by model family (`max_tokens` vs `max_completion_tokens`, `system` vs `developer` role), so swapping the id server-side would send old-family params to a new-family endpoint.
+- `OPENAI_IMAGE_MODEL_FALLBACK`: what a `flux*` model id is rewritten to when no pin is set (default `gpt-image-1.5`). Applies when a client asks for Flux but the request routes to OpenAI — otherwise OpenAI answers 400 `The model 'flux-kontext' does not exist.`
 - `IP_WHITELIST`/`IP_BLACKLIST`: IP access control (space-separated)
 - `UA_WHITELIST`/`UA_BLACKLIST`: User-Agent access control (comma-separated glob patterns, e.g. `UA_WHITELIST="okhttp/3.9.*"` with `UA_BLACKLIST="okhttp/*"`). Whitelist match allows, then blacklist match blocks, otherwise allowed; add `*` to the blacklist for strict whitelist-only mode. Patterns must match the full UA string (case-insensitive). When either list is set, requests with a missing/empty User-Agent are blocked. Blocked requests get a generic 403 identical to the HMAC-failure response (no hint that UA filtering exists).
 
