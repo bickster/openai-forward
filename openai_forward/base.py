@@ -371,8 +371,10 @@ class OpenaiBase:
                     boundary = f"----OpenAIForwardBoundary{uuid.uuid4().hex}"
                     parts = []
 
-                    for key in form:
-                        value = form[key]
+                    # multi_items() yields every part; `for key in form` would
+                    # yield each key once and form[key] returns only the last
+                    # value, dropping repeated parts such as image[] lists.
+                    for key, value in form.multi_items():
                         if hasattr(value, 'read'):  # UploadFile
                             file_bytes = await value.read()
                             parts.append(
