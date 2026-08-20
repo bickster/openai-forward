@@ -20,6 +20,19 @@ def multipart_body(size: str) -> bytes:
     ).encode()
 
 
+def multipart_body_multi_image(size: str) -> bytes:
+    """A gpt-image-1 style edit: repeated image[] parts, plus a repeated field."""
+    return (
+        f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="size"\r\n\r\n{size}\r\n'
+        f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="prompt"\r\n\r\nmake it blue\r\n'
+        f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="image[]"; filename="a.png"\r\n'
+        f'Content-Type: image/png\r\n\r\nFIRSTIMAGE\r\n'
+        f'--{BOUNDARY}\r\nContent-Disposition: form-data; name="image[]"; filename="b.png"\r\n'
+        f'Content-Type: image/png\r\n\r\nSECONDIMAGE\r\n'
+        f'--{BOUNDARY}--\r\n'
+    ).encode()
+
+
 def make_request(body: bytes) -> Request:
     scope = {
         "type": "http",
@@ -91,3 +104,20 @@ def test_image_edit_rebuilds_body_for_aspect_ratio_size():
     assert b"PNGBYTES" in forwarded
     assert b"make it blue" in forwarded
     assert captured["content_type"].startswith("multipart/form-data; boundary=")
+
+
+def test_image_edit_rebuild_keeps_every_repeated_field():
+    """The rebuild exists only to rewrite `size`; every other part must survive.
+
+    Iterating `for key in form` yields each key once and `form[key]` returns the
+    last value, so repeated parts - such as the image[] list gpt-image-1 accepts -
+    were silently collapsed to one.
+    """
+    _, captured = forward(multipart_body_multi_image("16:9"))
+    forwarded = captured["content"]
+    assert b"1536x1024" in forwarded
+    assert b"FIRSTIMAGE" in forwarded
+    assert b"SECONDIMAGE" in forwarded
+    assert forwarded.count(b'name="image[]"') == 2
+    assert b'filename="a.png"' in forwarded
+    assert b'filename="b.png"' in forwarded
