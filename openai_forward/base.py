@@ -1,5 +1,7 @@
 import os
+from functools import lru_cache
 from itertools import cycle
+from math import gcd
 
 import httpx
 from fastapi import HTTPException, Request, status
@@ -54,22 +56,92 @@ def _normalize_image_model(model) -> str | None:
     return None
 
 
-def _aspect_ratio_to_openai_dimensions(aspect_ratio: str) -> tuple[int, int]:
-    """Convert aspect ratio string to the nearest valid OpenAI dimensions.
+# Models that accept an arbitrary `size` instead of the three legacy dimensions. Kept as an
+# allow-list, which is the opposite of the model deny-list above, because the failure modes
+# are opposite: a legacy size is valid for every model, while an arbitrary size sent to a
+# model that only takes the legacy three is a 400. An unrecognised model therefore gets the
+# conservative treatment. Add ids here (comma separated, prefix match) as they ship.
+FLEXIBLE_SIZE_MODELS = tuple(
+    m.strip().lower()
+    for m in os.environ.get("OPENAI_IMAGE_FLEXIBLE_SIZE_MODELS", "gpt-image-2").split(",")
+    if m.strip()
+)
 
-    OpenAI only accepts: 1024x1024, 1536x1024 (landscape), 1024x1536 (portrait).
+# gpt-image-2 size rules: both edges a multiple of 16, longest edge <= 3840, long:short <= 3:1,
+# and total pixels within these bounds.
+_SIZE_STEP = 16
+_MAX_EDGE = 3840
+_MAX_ASPECT = 3.0
+_MIN_PIXELS = 655_360
+_MAX_PIXELS = 8_294_400
+
+
+def _model_takes_any_size(model) -> bool:
+    return isinstance(model, str) and model.strip().lower().startswith(FLEXIBLE_SIZE_MODELS)
+
+
+def _legacy_dimensions(w_ratio: int, h_ratio: int) -> tuple[int, int]:
+    """The three sizes every GPT Image model before gpt-image-2 accepts, by orientation."""
+    if w_ratio > h_ratio:
+        return 1536, 1024
+    if h_ratio > w_ratio:
+        return 1024, 1536
+    return 1024, 1024
+
+
+@lru_cache(maxsize=64)
+def _exact_dimensions(w_ratio: int, h_ratio: int) -> tuple[int, int] | None:
+    """Largest size with exactly this aspect ratio that stays within the pixel budget the
+    legacy size for the same orientation would have used, so honouring the ratio never costs
+    more than snapping to it did. Falls back to the smallest valid size above the budget, and
+    to None when the ratio cannot be expressed at all (too elongated, or no multiple of 16
+    lands inside the pixel bounds).
+    """
+    if max(w_ratio, h_ratio) / min(w_ratio, h_ratio) > _MAX_ASPECT:
+        return None
+
+    divisor = gcd(w_ratio, h_ratio)
+    unit_w, unit_h = w_ratio // divisor, h_ratio // divisor
+
+    candidates = []
+    k = 1
+    while max(unit_w * k, unit_h * k) <= _MAX_EDGE:
+        w, h = unit_w * k, unit_h * k
+        if w % _SIZE_STEP == 0 and h % _SIZE_STEP == 0 and _MIN_PIXELS <= w * h <= _MAX_PIXELS:
+            candidates.append((w, h))
+        k += 1
+    if not candidates:
+        return None
+
+    legacy_w, legacy_h = _legacy_dimensions(w_ratio, h_ratio)
+    budget = legacy_w * legacy_h
+    within = [c for c in candidates if c[0] * c[1] <= budget]
+    if within:
+        return max(within, key=lambda c: c[0] * c[1])
+    return min(candidates, key=lambda c: c[0] * c[1])
+
+
+def _aspect_ratio_to_openai_dimensions(aspect_ratio: str, model=None) -> tuple[int, int]:
+    """Convert an aspect ratio string such as "16:9" to dimensions OpenAI will accept.
+
+    gpt-image-2 takes any size meeting its constraints, so the ratio is honoured exactly.
+    Earlier models take only 1024x1024, 1536x1024 and 1024x1536, so the ratio is snapped to
+    whichever matches its orientation -- which is why every portrait ratio used to come back
+    the same shape.
     """
     try:
         w_ratio, h_ratio = map(int, aspect_ratio.split(':'))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
+        return 1024, 1024
+    if w_ratio <= 0 or h_ratio <= 0:
         return 1024, 1024
 
-    if w_ratio > h_ratio:
-        return 1536, 1024
-    elif h_ratio > w_ratio:
-        return 1024, 1536
-    else:
-        return 1024, 1024
+    if _model_takes_any_size(model):
+        exact = _exact_dimensions(w_ratio, h_ratio)
+        if exact is not None:
+            return exact
+
+    return _legacy_dimensions(w_ratio, h_ratio)
 
 
 class OpenaiBase:
@@ -375,17 +447,22 @@ class OpenaiBase:
             try:
                 body = await request.body()
                 data = json.loads(body)
-                size = data.get('size', '1024x1024')
-                if ':' in size:
-                    w, h = _aspect_ratio_to_openai_dimensions(size)
-                    data['size'] = f"{w}x{h}"
-                    logger.info(f"Converted size '{size}' -> '{data['size']}'")
-                elif 'x' not in size:
-                    data['size'] = '1024x1024'
+                # Resolve the model first: it decides which sizes are legal below.
                 new_model = _normalize_image_model(data.get('model'))
                 if new_model is not None:
                     logger.info(f"Rewrote model '{data.get('model')}' -> '{new_model}'")
                     data['model'] = new_model
+                model = data.get('model')
+
+                size = data.get('size', '1024x1024')
+                if ':' in size:
+                    w, h = _aspect_ratio_to_openai_dimensions(size, model)
+                    data['size'] = f"{w}x{h}"
+                    logger.info(f"Converted size '{size}' -> '{data['size']}' for model {model!r}")
+                elif 'x' not in size and not (size == 'auto' and _model_takes_any_size(model)):
+                    # 'auto' is a real value for models that accept any size -- let it through
+                    # rather than pinning them to a square.
+                    data['size'] = '1024x1024'
                 content = json.dumps(data).encode()
             except Exception as e:
                 logger.debug(f"Failed to parse image generation body for size conversion: {e}")
@@ -401,18 +478,19 @@ class OpenaiBase:
                 size = form.get('size', '1024x1024')
                 needs_rebuild = False
 
-                if isinstance(size, str) and ':' in size:
-                    w, h = _aspect_ratio_to_openai_dimensions(size)
-                    new_size = f"{w}x{h}"
-                    logger.info(f"Converted edit size '{size}' -> '{new_size}'")
-                    needs_rebuild = True
-                else:
-                    new_size = size
-
                 new_model = _normalize_image_model(form.get('model'))
                 if new_model is not None:
                     logger.info(f"Rewrote edit model '{form.get('model')}' -> '{new_model}'")
                     needs_rebuild = True
+                model = new_model if new_model is not None else form.get('model')
+
+                if isinstance(size, str) and ':' in size:
+                    w, h = _aspect_ratio_to_openai_dimensions(size, model)
+                    new_size = f"{w}x{h}"
+                    logger.info(f"Converted edit size '{size}' -> '{new_size}' for model {model!r}")
+                    needs_rebuild = True
+                else:
+                    new_size = size
 
                 if needs_rebuild:
                     import uuid
