@@ -39,6 +39,32 @@ def _aspect_ratio_to_openai_dimensions(aspect_ratio: str) -> tuple[int, int]:
         return 1024, 1024
 
 
+def _parse_platforms(env_value: str, enum_cls, env_name: str, default: str) -> list:
+    """Parse a comma-separated platform list from an environment variable.
+
+    Parsed at class-definition time, so anything raised here stops the service
+    from starting. Empty entries are skipped and an entirely empty value falls
+    back to `default`; an unrecognised name is fatal, because silently ignoring
+    a typo would route traffic to a platform nobody asked for.
+    """
+    names = [name.strip() for name in env_value.split(",")]
+    names = [name for name in names if name]
+    if not names:
+        logger.warning(f"{env_name} is empty, falling back to {default!r}")
+        names = [name.strip() for name in default.split(",") if name.strip()]
+
+    platforms = []
+    for name in names:
+        try:
+            platforms.append(enum_cls[name])
+        except KeyError:
+            valid = ", ".join(enum_cls.__members__)
+            raise ValueError(
+                f"{env_name}: unknown platform {name!r}. Valid platforms: {valid}"
+            ) from None
+    return platforms
+
+
 class OpenaiBase:
     BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com").strip()
     ROUTE_PREFIX = os.environ.get("ROUTE_PREFIX", "").strip()
@@ -63,8 +89,12 @@ class OpenaiBase:
             ROUTE_PREFIX = "/" + ROUTE_PREFIX
     timeout = 600
 
-    IMAGE_GEN_PLATFORMS = [ImageGenPlatform[p.strip()] for p in _IMAGE_GEN_PLATFORMS_STR.split(",")]
-    IMAGE_EDIT_PLATFORMS = [ImageEditPlatform[p.strip()] for p in _IMAGE_EDIT_PLATFORMS_STR.split(",")]
+    IMAGE_GEN_PLATFORMS = _parse_platforms(
+        _IMAGE_GEN_PLATFORMS_STR, ImageGenPlatform, "IMAGE_GEN_PLATFORM", "dalle3"
+    )
+    IMAGE_EDIT_PLATFORMS = _parse_platforms(
+        _IMAGE_EDIT_PLATFORMS_STR, ImageEditPlatform, "IMAGE_EDIT_PLATFORM", "openai"
+    )
 
     logger.debug(f"IMAGE_GEN_PLATFORM env: {_IMAGE_GEN_PLATFORMS_STR!r}")
     logger.debug(f"IMAGE_GEN_PLATFORMS resolved: {[p.name for p in IMAGE_GEN_PLATFORMS]}")
