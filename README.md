@@ -214,6 +214,7 @@ curl --location 'https://api.openai-forward.com/v1/images/generations' \
 | --base_url | 同 OPENAI_BASE_URL | https://api.openai.com |
 | --api_key | 同 OPENAI_API_KEY  |         `None`         |
 | --forward_key | 同 FORWARD_KEY     |         `None`         |
+| --app_secret | 同 APP_SECRET，逗号分隔 |         `None`         |
 | --route_prefix | 同 ROUTE_PREFIX    |          `None`          |
 | --log_chat | 同 LOG_CHAT        |        `False`         |
 
@@ -230,7 +231,33 @@ curl --location 'https://api.openai-forward.com/v1/images/generations' \
 | FORWARD_KEY     | 允许调用方使用该key代替openai api key，支持多个forward key, 以空格分割; 如果设置了OPENAI_API_KEY，而没有设置FORWARD_KEY, 则客户端调用时无需提供密钥, 此时出于安全考虑不建议FORWARD_KEY置空 |            无             |
 | ROUTE_PREFIX    | 路由前缀                                                                                                                              |            无             |
 | LOG_CHAT        | 是否记录聊天内容                                                                                                                          |         `false`          |
+| APP_SECRET      | HMAC secret(s), comma-separated; accepts signatures using any configured secret | 无 |
 
+
+### App secret rotation
+
+`APP_SECRET` accepts one secret or a comma-separated list. The same format is
+supported by `--app_secret`:
+
+```dotenv
+APP_SECRET=old-secret,new-secret
+```
+
+```bash
+openai-forward run --app_secret="old-secret,new-secret"
+```
+
+The proxy accepts `X-Request-Signature` when it matches the HMAC-SHA256 of the
+raw request body using any configured secret. Existing clients keep the same
+signature format and send no secret or key identifier.
+
+Add the new secret alongside the old one, restart/redeploy the proxy, then
+release apps signing with the new secret. Once migration is complete, remove
+the old secret and restart/redeploy again. Apps still using a removed secret
+will receive `403 Forbidden`.
+
+Whitespace around entries is trimmed and empty entries are ignored. Commas
+cannot be part of a secret. An empty or missing `APP_SECRET` accepts no requests.
 
 ## 高级配置
 

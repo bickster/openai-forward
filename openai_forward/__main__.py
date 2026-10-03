@@ -16,8 +16,6 @@ class Cli:
         route_prefix=None,
         ip_whitelist=None,
         ip_blacklist=None,
-        ua_whitelist=None,
-        ua_blacklist=None,
         app_secret=None,
     ):
         """Run forwarding serve.
@@ -34,9 +32,7 @@ class Cli:
         route_prefix: str, None
         ip_whitelist: str, None
         ip_blacklist: str, None
-        ua_whitelist: str, None  comma-separated glob patterns, e.g. "okhttp/3.9.*"
-        ua_blacklist: str, None  comma-separated glob patterns, e.g. "okhttp/*"
-        app_secret: str, None
+        app_secret: str, None  comma-separated secrets accepted for HMAC validation
         """
         if base_url:
             os.environ["OPENAI_BASE_URL"] = base_url
@@ -52,10 +48,6 @@ class Cli:
             os.environ["IP_WHITELIST"] = ip_whitelist
         if ip_blacklist:
             os.environ["IP_BLACKLIST"] = ip_blacklist
-        if ua_whitelist:
-            os.environ["UA_WHITELIST"] = ua_whitelist
-        if ua_blacklist:
-            os.environ["UA_BLACKLIST"] = ua_blacklist
         if app_secret:
             os.environ["APP_SECRET"] = app_secret
 
