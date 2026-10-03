@@ -36,7 +36,7 @@ class Cli:
         ip_blacklist: str, None
         ua_whitelist: str, None  comma-separated glob patterns, e.g. "okhttp/3.9.*"
         ua_blacklist: str, None  comma-separated glob patterns, e.g. "okhttp/*"
-        app_secret: str, None  comma-separated secrets accepted for HMAC validation
+        app_secret: str, None  space-separated secrets accepted for HMAC validation
         """
         if base_url:
             os.environ["OPENAI_BASE_URL"] = base_url

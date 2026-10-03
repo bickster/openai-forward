@@ -169,7 +169,7 @@ class OpenaiBase:
     # Comma-separated glob patterns (e.g. "okhttp/3.9.*"); comma because UA strings contain spaces
     UA_WHITELIST = env2list("UA_WHITELIST", sep=",")
     UA_BLACKLIST = env2list("UA_BLACKLIST", sep=",")
-    APP_SECRET = env2list("APP_SECRET", sep=",")
+    APP_SECRET = env2list("APP_SECRET", sep=" ")
     _IMAGE_GEN_PLATFORMS_STR = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
     _IMAGE_EDIT_PLATFORMS_STR = os.environ.get("IMAGE_EDIT_PLATFORM", "openai").strip()
 
