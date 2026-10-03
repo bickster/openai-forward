@@ -169,7 +169,7 @@ def forward_generation(payload, pin=""):
         )
         request = Request(scope, receive)
         original_secret, original_pin = OpenaiBase.APP_SECRET, base.OPENAI_IMAGE_MODEL
-        OpenaiBase.APP_SECRET, base.OPENAI_IMAGE_MODEL = SECRET, pin
+        OpenaiBase.APP_SECRET, base.OPENAI_IMAGE_MODEL = [SECRET], pin
         try:
             assert await OpenaiBase.validate_request(request)
             aiter_bytes, _, _, background = await OpenaiBase.to_openai(

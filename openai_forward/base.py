@@ -169,7 +169,7 @@ class OpenaiBase:
     # Comma-separated glob patterns (e.g. "okhttp/3.9.*"); comma because UA strings contain spaces
     UA_WHITELIST = env2list("UA_WHITELIST", sep=",")
     UA_BLACKLIST = env2list("UA_BLACKLIST", sep=",")
-    APP_SECRET = os.environ.get("APP_SECRET", "").strip()
+    APP_SECRET = env2list("APP_SECRET", sep=",")
     _IMAGE_GEN_PLATFORMS_STR = os.environ.get("IMAGE_GEN_PLATFORM", "dalle3").strip()
     _IMAGE_EDIT_PLATFORMS_STR = os.environ.get("IMAGE_EDIT_PLATFORM", "openai").strip()
 
@@ -277,13 +277,16 @@ class OpenaiBase:
     @classmethod
     async def validate_request(cls, request: Request):
         signature = request.headers.get('X-Request-Signature')
-        if not signature:
+        if not signature or not signature.isascii():
             return False
         request_data = await request.body()
-        expected_signature = hmac.new(
-            cls.APP_SECRET.encode(), request_data, hashlib.sha256
-        ).hexdigest()
-        return hmac.compare_digest(signature, expected_signature)
+        for secret in cls.APP_SECRET:
+            expected_signature = hmac.new(
+                secret.encode(), request_data, hashlib.sha256
+            ).hexdigest()
+            if hmac.compare_digest(signature, expected_signature):
+                return True
+        return False
 
     @staticmethod
     def _resolve_platform(platforms, header_value):

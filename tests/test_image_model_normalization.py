@@ -87,7 +87,7 @@ def forward(body: bytes, path: str, content_type: str) -> bytes:
         )
         request = make_request(body, path, content_type)
         original_secret = OpenaiBase.APP_SECRET
-        OpenaiBase.APP_SECRET = SECRET
+        OpenaiBase.APP_SECRET = [SECRET]
         try:
             assert await OpenaiBase.validate_request(request)
             aiter_bytes, status_code, _, background = await OpenaiBase.to_openai(
