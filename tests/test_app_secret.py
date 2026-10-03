@@ -71,7 +71,9 @@ def test_accepts_configured_secrets(configured_proxy, configuration, secret):
 )
 def test_rejects_unknown_or_retired_secret(configured_proxy, configuration):
     proxy = configured_proxy(configuration)
-    assert asyncio.run(proxy.validate_request(signed_request("retired-secret"))) is False
+    assert (
+        asyncio.run(proxy.validate_request(signed_request("retired-secret"))) is False
+    )
 
 
 @pytest.mark.parametrize("configuration", [None, "", " , , ", "old-secret,,new-secret"])
